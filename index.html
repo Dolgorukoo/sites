@@ -29,6 +29,9 @@ button,input{font:inherit}
 .day:active{transform:scale(.95)}
 .day.muted{color:#454c59}
 .day.today{border-color:#4d5870}
+.day.workday:not(.selected){background:rgba(53,208,127,.13);border-color:rgba(53,208,127,.3)}
+.day.weekend:not(.selected){background:rgba(255,92,108,.10);border-color:rgba(255,92,108,.25)}
+.day.dayoff:not(.selected){background:rgba(255,92,108,.18);border-color:rgba(255,92,108,.55)}
 .day.selected{background:var(--accent);font-weight:750}
 .day.has-data:after{content:"";position:absolute;width:4px;height:4px;border-radius:50%;background:var(--green);bottom:5px;left:50%;transform:translateX(-50%)}
 .day.selected.has-data:after{background:#fff}
@@ -37,7 +40,13 @@ button,input{font:inherit}
 .field input{width:100%;height:52px;background:var(--card2);border:1px solid var(--line);border-radius:13px;color:var(--text);padding:20px 12px 5px;outline:none;font-size:17px}
 .field input:focus{border-color:var(--accent)}
 .field span{position:absolute;left:12px;top:6px;color:var(--muted);font-size:10px;font-weight:650}
-.save{width:100%;height:52px;margin-top:10px;border:0;border-radius:14px;background:var(--accent);color:#fff;font-weight:750;font-size:16px;transition:.18s}
+.action-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.save,.dayoff{width:100%;height:52px;border:0;border-radius:14px;color:#fff;font-weight:750;font-size:15px;transition:.18s}
+.save{background:var(--accent)}
+.dayoff{background:var(--card2);border:1px solid var(--line);color:var(--text)}
+.dayoff.active{background:var(--red);border-color:var(--red);color:#fff}
+.save.done{background:var(--green)}
+.save:active,.dayoff:active{transform:scale(.985)}
 .save.done{background:var(--green)}
 .save:active{transform:scale(.985)}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -87,7 +96,7 @@ canvas{width:100%;height:100%;display:block}
 <div class="field"><span>ЗАРАБОТАНО, ₴</span><input id="money" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0"></div>
 <div class="field"><span>БОНУСЫ, ₴</span><input id="bonus" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0"></div>
 </div>
-<button class="save" id="save">Сохранить</button>
+<div class="action-row"><button class="save" id="save">Сохранить</button><button class="dayoff" id="dayoff">Выходной</button></div>
 </section>
 
 <section class="card">
@@ -97,6 +106,7 @@ canvas{width:100%;height:100%;display:block}
 <div class="stat"><div class="v" id="monthHours">0 ч</div><div class="k">Отработано часов</div></div>
 <div class="stat"><div class="v" id="monthBase">0 ₴</div><div class="k">Основной заработок</div></div>
 <div class="stat"><div class="v" id="monthBonus">0 ₴</div><div class="k">Бонусы</div></div>
+<div class="stat"><div class="v" id="monthWorkDays">0</div><div class="k">Рабочих дней</div></div>
 </div>
 </section>
 
@@ -160,6 +170,21 @@ function hours(n){return Number(n||0).toLocaleString("ru-RU",{maximumFractionDig
 function startOfDay(d){return new Date(d.getFullYear(),d.getMonth(),d.getDate())}
 function formatDate(d){return d.toLocaleDateString("ru-RU",{day:"numeric",month:"long",year:"numeric"})}
 
+
+function isWeekend(date){
+  const d=date.getDay();
+  return d===0 || d===6;
+}
+function isDayOff(date){
+  const r=state.records[key(date)];
+  return !!(r && r.dayOff);
+}
+function isWorkDay(date){
+  return !isDayOff(date) && !isWeekend(date);
+}
+function getMonthKey(date){
+  return date.getFullYear()+"-"+String(date.getMonth()+1).padStart(2,"0");
+}
 function renderCalendar(){
   const y=state.viewDate.getFullYear(),m=state.viewDate.getMonth(),first=new Date(y,m,1);
   const offset=(first.getDay()+6)%7,total=new Date(y,m+1,0).getDate(),prevTotal=new Date(y,m,0).getDate();
@@ -173,8 +198,11 @@ function renderCalendar(){
     const b=document.createElement("button");b.className="day";
     if(date.getMonth()!==m)b.classList.add("muted");
     if(sameDay(date,new Date()))b.classList.add("today");
+    if(isDayOff(date))b.classList.add("dayoff");
+    else if(isWeekend(date))b.classList.add("weekend");
+    else b.classList.add("workday");
     if(sameDay(date,state.selectedDate))b.classList.add("selected");
-    if(state.records[key(date)])b.classList.add("has-data");
+    if(state.records[key(date)] && !isDayOff(date))b.classList.add("has-data");
     b.textContent=date.getDate();b.onclick=()=>selectDate(date);el.appendChild(b);
   }
 }
@@ -185,18 +213,29 @@ function selectDate(date){
   document.getElementById("hours").value=rec.hours??"";
   document.getElementById("money").value=rec.money??"";
   document.getElementById("bonus").value=rec.bonus??"";
+  const off=document.getElementById("dayoff");
+  off.classList.toggle("active",!!rec.dayOff);
+  off.textContent=rec.dayOff?"Выходной ✓":"Выходной";
   renderCalendar();renderMonthStats();renderChart();
 }
 function getMonthStats(){
-  const y=state.selectedDate.getFullYear(),m=state.selectedDate.getMonth();
+  const y=state.viewDate.getFullYear(),m=state.viewDate.getMonth();
   let base=0,bonus=0,totalHours=0;
   Object.entries(state.records).forEach(([k,r])=>{
     const d=dateFromKey(k);
     if(d.getFullYear()===y&&d.getMonth()===m){
-      base+=Number(r.money)||0;bonus+=Number(r.bonus)||0;totalHours+=Number(r.hours)||0;
+      base+=Number(r.money)||0;
+      bonus+=Number(r.bonus)||0;
+      totalHours+=Number(r.hours)||0;
     }
   });
-  return {base,bonus,total:base+bonus,hours:totalHours};
+  const daysInMonth=new Date(y,m+1,0).getDate();
+  let workDays=0;
+  for(let day=1;day<=daysInMonth;day++){
+    const d=new Date(y,m,day);
+    if(isWorkDay(d)) workDays++;
+  }
+  return {base,bonus,total:base+bonus,hours:totalHours,workDays};
 }
 function renderMonthStats(){
   const s=getMonthStats();
@@ -204,6 +243,7 @@ function renderMonthStats(){
   document.getElementById("monthHours").textContent=hours(s.hours);
   document.getElementById("monthBase").textContent=money(s.base);
   document.getElementById("monthBonus").textContent=money(s.bonus);
+  document.getElementById("monthWorkDays").textContent=s.workDays;
 }
 function renderOperations(){
   const items=Object.entries(state.records).sort((a,b)=>(b[1].savedAt||0)-(a[1].savedAt||0)).slice(0,5);
@@ -237,19 +277,49 @@ function renderChart(){
 }
 function renderAll(){renderCalendar();renderMonthStats();renderOperations();renderChart()}
 
-document.getElementById("prevMonth").onclick=()=>{state.viewDate.setMonth(state.viewDate.getMonth()-1);renderCalendar();renderMonthStats()}
-document.getElementById("nextMonth").onclick=()=>{state.viewDate.setMonth(state.viewDate.getMonth()+1);renderCalendar();renderMonthStats()}
+document.getElementById("prevMonth").onclick=()=>{
+  const day=state.selectedDate.getDate();
+  state.viewDate.setMonth(state.viewDate.getMonth()-1);
+  const max=new Date(state.viewDate.getFullYear(),state.viewDate.getMonth()+1,0).getDate();
+  state.selectedDate=new Date(state.viewDate.getFullYear(),state.viewDate.getMonth(),Math.min(day,max));
+  selectDate(state.selectedDate);
+}
+document.getElementById("nextMonth").onclick=()=>{
+  const day=state.selectedDate.getDate();
+  state.viewDate.setMonth(state.viewDate.getMonth()+1);
+  const max=new Date(state.viewDate.getFullYear(),state.viewDate.getMonth()+1,0).getDate();
+  state.selectedDate=new Date(state.viewDate.getFullYear(),state.viewDate.getMonth(),Math.min(day,max));
+  selectDate(state.selectedDate);
+}
 
 document.getElementById("save").onclick=()=>{
   const k=key(state.selectedDate);
+  const old=state.records[k]||{};
   const h=Math.max(0,Number(document.getElementById("hours").value)||0);
   const m=Math.max(0,Number(document.getElementById("money").value)||0);
   const b=Math.max(0,Number(document.getElementById("bonus").value)||0);
-  if(h===0&&m===0&&b===0) delete state.records[k];
-  else state.records[k]={hours:h,money:m,bonus:b,savedAt:Date.now()};
-  saveData();renderAll();
+  if(h===0&&m===0&&b===0&&!old.dayOff) delete state.records[k];
+  else state.records[k]={hours:h,money:m,bonus:b,dayOff:!!old.dayOff,savedAt:Date.now()};
+  saveData();renderAll();selectDate(state.selectedDate);
   const btn=document.getElementById("save");btn.textContent="Добавлено ✓";btn.classList.add("done");
   setTimeout(()=>{btn.textContent="Сохранить";btn.classList.remove("done")},1600);
+};
+
+document.getElementById("dayoff").onclick=()=>{
+  const k=key(state.selectedDate);
+  const old=state.records[k]||{};
+  const now=!old.dayOff;
+  if(now){
+    state.records[k]={hours:old.hours||0,money:old.money||0,bonus:old.bonus||0,dayOff:true,savedAt:old.savedAt||Date.now()};
+  }else{
+    if((Number(old.hours)||0)===0&&(Number(old.money)||0)===0&&(Number(old.bonus)||0)===0){
+      delete state.records[k];
+    }else{
+      state.records[k]={hours:old.hours||0,money:old.money||0,bonus:old.bonus||0,dayOff:false,savedAt:old.savedAt||Date.now()};
+    }
+  }
+  saveData();
+  selectDate(state.selectedDate);
 };
 
 document.querySelectorAll(".tab").forEach(btn=>btn.onclick=()=>{
