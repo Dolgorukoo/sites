@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="ru">
+<html lang="uk">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b0d12">
-<title>Буфер — калькулятор заработка</title>
+<title>Буфер — калькулятор заробітку</title>
 <style>
 :root{
   --bg:#0b0d12;--card:#141821;--card2:#1a1f29;--text:#f5f7fa;--muted:#8d96a6;
@@ -38,7 +38,15 @@ button,input{font:inherit}
 .day.selected::after{display:none}
 .day.has-data:after{content:"";position:absolute;width:4px;height:4px;border-radius:50%;background:var(--green);bottom:5px;left:50%;transform:translateX(-50%)}
 .day.selected.has-data:after{background:#fff}
-.form-grid{display:grid;gap:10px}
+.form-grid{display:grid;gap:10px}.time-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.time-wheel{height:116px;background:var(--card2);border:1px solid var(--line);border-radius:13px;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;user-select:none;touch-action:none}
+.wheel-col{height:116px;width:82px;overflow-y:auto;scroll-snap-type:y mandatory;scrollbar-width:none;padding:38px 0}
+.wheel-col::-webkit-scrollbar{display:none}
+.wheel-item{height:40px;display:flex;align-items:center;justify-content:center;scroll-snap-align:center;color:#697386;font-size:18px;font-weight:650}
+.wheel-item.active{color:var(--text);font-size:22px;font-weight:800}
+.colon{font-size:24px;font-weight:800;margin:0 2px;z-index:2}
+.time-wheel:before,.time-wheel:after{content:"";position:absolute;left:10px;right:10px;height:1px;background:var(--line);pointer-events:none}
+.time-wheel:before{top:38px}.time-wheel:after{bottom:38px}
 .field{position:relative}
 .field input{width:100%;height:52px;background:var(--card2);border:1px solid var(--line);border-radius:13px;color:var(--text);padding:20px 12px 5px;outline:none;font-size:17px}
 .field input:focus{border-color:var(--accent)}
@@ -67,7 +75,7 @@ button,input{font:inherit}
 .chart-tabs::-webkit-scrollbar{display:none}
 .tab{flex:1;min-width:70px;height:36px;border:1px solid var(--line);background:var(--card2);color:var(--muted);border-radius:10px;font-size:12px;font-weight:700}
 .tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
-.chart-wrap{height:220px;position:relative}
+.chart-wrap{height:220px;position:relative}.chart-average{text-align:center;margin-top:8px;font-size:13px;color:var(--muted);font-weight:700}
 canvas{width:100%;height:100%;display:block}
 .export{width:100%;height:48px;border:1px solid var(--line);background:var(--card2);color:var(--text);border-radius:13px;font-weight:750;font-size:15px}
 .export:active{transform:scale(.985)}
@@ -79,7 +87,7 @@ canvas{width:100%;height:100%;display:block}
 <body>
 <div class="app">
 <header class="header">
-<h1>Буфер</h1><p>Учет заработка по дням</p>
+<h1>Буфер</h1><p>Облік заробітку по днях</p>
 </header>
 
 <section class="card">
@@ -88,54 +96,61 @@ canvas{width:100%;height:100%;display:block}
 <div class="month-title" id="monthTitle"></div>
 <button class="icon-btn" id="nextMonth">›</button>
 </div>
-<div class="weekdays"><div>Пн</div><div>Вт</div><div>Ср</div><div>Чт</div><div>Пт</div><div>Сб</div><div>Вс</div></div>
+<div class="weekdays"><div>Пн</div><div>Вт</div><div>Ср</div><div>Чт</div><div>Пт</div><div>Сб</div><div>Нд</div></div>
 <div class="days" id="days"></div>
 </section>
 
 <section class="card">
 <div class="selected-date" id="selectedDate" style="font-size:15px;font-weight:700;margin-bottom:12px"></div>
 <div class="form-grid">
-<div class="field"><span>ОТРАБОТАНО ЧАСОВ</span><input id="hours" type="number" min="0" step="0.25" inputmode="decimal" placeholder="0"></div>
-<div class="field"><span>ЗАРАБОТАНО, ₴</span><input id="money" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0"></div>
-<div class="field"><span>БОНУСЫ, ₴</span><input id="bonus" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0"></div>
+<div class="field">
+<span>ЧАС РОБОТИ</span>
+<div class="time-wheel" id="timeWheel">
+  <div class="wheel-col" id="hoursWheel"></div>
+  <div class="colon">:</div>
+  <div class="wheel-col" id="minutesWheel"></div>
 </div>
-<div class="action-row"><button class="save" id="save">Сохранить</button><button class="dayoff" id="dayoff">Выходной</button></div>
+<input type="hidden" id="hours" value="0">
+<input type="hidden" id="minutes" value="0">
+</div>
+<div class="field"><span>ЗАРОБЛЕНО, ₴</span><input id="money" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0"></div>
+<div class="field"><span>БОНУСИ, ₴</span><input id="bonus" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0"></div>
+</div>
+<div class="action-row"><button class="save" id="save">Зберегти</button><button class="dayoff" id="dayoff">Вихідний</button></div>
 </section>
 
 <section class="card">
-<h2 class="section-title">Итоги за месяц</h2>
+<h2 class="section-title">Підсумки за місяць</h2>
+<div style="font-size:11px;color:var(--muted);margin:-6px 0 12px">Ставка за замовчуванням — 10 000 ₴ на місяць.</div>
 <div class="stats">
-<div class="stat"><div class="v" id="monthMoney">0 ₴</div><div class="k">Всего заработано</div></div>
-<div class="stat"><div class="v" id="monthHours">0 ч</div><div class="k">Отработано часов</div></div>
-<div class="stat"><div class="v" id="monthBase">0 ₴</div><div class="k">Основной заработок</div></div>
-<div class="stat"><div class="v" id="monthBonus">0 ₴</div><div class="k">Бонусы</div></div>
-<div class="stat"><div class="v" id="monthWorkDays">0</div><div class="k">Рабочих дней</div></div>
-</div>
-</section>
+<div class="stat"><div class="v" id="monthRate">10 000 ₴</div><div class="k">Ставка</div></div>
+<div class="stat"><div class="v" id="monthEarned">0 ₴</div><div class="k">Сума заробітку</div></div>
+<div class="stat"><div class="v" id="monthBonus">0 ₴</div><div class="k">Сума бонусів</div></div>
+<div class="stat"><div class="v" id="monthTotal">10 000 ₴</div><div class="k">Заробіток + бонуси + ставка</div></div>
+<div class="stat"><div class="v" id="monthWorkDays">0</div><div class="k">Робочих днів</div></div>
+<div class="stat"><div class="v" id="monthHours">0 год</div><div class="k">Час, витрачений на роботу</div></div>
+</div></section>
+
+
 
 <section class="card">
-<h2 class="section-title">Последние 5 операций</h2>
-<div class="operations" id="operations"></div>
-</section>
-
-<section class="card">
-<h2 class="section-title">График заработка</h2>
+<h2 class="section-title">Графік заробітку</h2>
 <div class="chart-tabs">
-<button class="tab" data-range="7">Неделя</button>
-<button class="tab" data-range="14">2 недели</button>
-<button class="tab active" data-range="30">Месяц</button>
-<button class="tab" data-range="90">3 месяца</button>
+<button class="tab" data-range="7">Тиждень</button>
+<button class="tab" data-range="14">2 тижні</button>
+<button class="tab active" data-range="30">Місяць</button>
+<button class="tab" data-range="90">3 місяці</button>
 </div>
-<div class="chart-wrap"><canvas id="chart"></canvas></div>
+<div class="chart-wrap"><canvas id="chart"></canvas></div><div class="chart-average" id="chartAverage">Середній заробіток: 0 ₴</div>
 </section>
 
 <section class="card">
-<h2 class="section-title">Экспорт</h2>
-<button class="export" id="exportExcel">Экспортировать в Excel</button>
+<h2 class="section-title">Експорт</h2>
+<button class="export" id="exportExcel">Експортировать в Excel</button>
 <div class="export-status" id="exportStatus"></div>
 </section>
 
-<div class="footer">Данные хранятся локально на этом устройстве</div>
+<div class="footer">Дані зберігаються локально на цьому пристрої</div>
 </div>
 
 <script>
@@ -168,10 +183,13 @@ function key(date){
 }
 function dateFromKey(k){const [y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d)}
 function sameDay(a,b){return key(a)===key(b)}
-function money(n){return Number(n||0).toLocaleString("ru-RU",{maximumFractionDigits:2})+" ₴"}
-function hours(n){return Number(n||0).toLocaleString("ru-RU",{maximumFractionDigits:2})+" ч"}
+function money(n){return Number(n||0).toLocaleString("uk-UA",{maximumFractionDigits:2})+" ₴"}
+function hours(n){
+  const total=Math.round((Number(n)||0)*60), h=Math.floor(total/60), m=total%60;
+  return h ? (m ? h+" ч "+m+" мин" : h+" ч") : m+" мин";
+}
 function startOfDay(d){return new Date(d.getFullYear(),d.getMonth(),d.getDate())}
-function formatDate(d){return d.toLocaleDateString("ru-RU",{day:"numeric",month:"long",year:"numeric"})}
+function formatDate(d){return d.toLocaleDateString("uk-UA",{day:"numeric",month:"long",year:"numeric"})}
 
 
 function isWeekend(date){
@@ -192,7 +210,7 @@ function getMonthKey(date){
 function renderCalendar(){
   const y=state.viewDate.getFullYear(),m=state.viewDate.getMonth(),first=new Date(y,m,1);
   const offset=(first.getDay()+6)%7,total=new Date(y,m+1,0).getDate(),prevTotal=new Date(y,m,0).getDate();
-  document.getElementById("monthTitle").textContent=state.viewDate.toLocaleDateString("ru-RU",{month:"long",year:"numeric"});
+  document.getElementById("monthTitle").textContent=state.viewDate.toLocaleDateString("uk-UA",{month:"long",year:"numeric"});
   const el=document.getElementById("days");el.innerHTML="";
   for(let i=0;i<42;i++){
     let n=i-offset+1,date;
@@ -208,58 +226,83 @@ function renderCalendar(){
     b.textContent=date.getDate();b.onclick=()=>selectDate(date);el.appendChild(b);
   }
 }
+
+function initWheel(id,max,getValue,setValue){
+  const el=document.getElementById(id);
+  for(let i=0;i<=max;i++){
+    const item=document.createElement("div");
+    item.className="wheel-item";
+    item.dataset.value=i;
+    item.textContent=String(i).padStart(2,"0");
+    el.appendChild(item);
+  }
+  const refresh=()=>{
+    const center=el.scrollTop+el.clientHeight/2;
+    let best=null,dist=Infinity;
+    el.querySelectorAll(".wheel-item").forEach(item=>{
+      const d=Math.abs(item.offsetTop+item.offsetHeight/2-center);
+      item.classList.toggle("active",d<21);
+      if(d<dist){dist=d;best=item}
+    });
+    if(best)setValue(Number(best.dataset.value));
+  };
+  el.addEventListener("scroll",()=>{requestAnimationFrame(refresh)});
+  el.addEventListener("click",e=>{
+    const item=e.target.closest(".wheel-item");
+    if(item)el.scrollTo({top:item.offsetTop-38,behavior:"smooth"});
+  });
+  return el;
+}
+const hoursWheel=initWheel("hoursWheel",23,()=>Number(document.getElementById("hours").value),v=>document.getElementById("hours").value=v);
+const minutesWheel=initWheel("minutesWheel",59,()=>Number(document.getElementById("minutes").value),v=>document.getElementById("minutes").value=v);
+function setWheelValue(id,value){
+  const el=document.getElementById(id);
+  const item=el.querySelector(`[data-value="${Math.max(0,Math.min(id==="hoursWheel"?23:59,Number(value)||0))}"]`);
+  if(item){el.scrollTop=item.offsetTop-38;item.classList.add("active")}
+}
 function selectDate(date){
   state.selectedDate=new Date(date);state.viewDate=new Date(date);
   const rec=state.records[key(date)]||{};
   document.getElementById("selectedDate").textContent=formatDate(date);
-  document.getElementById("hours").value=rec.hours??"";
+  const savedTotal=Math.round((Number(rec.hours)||0)*60);
+  const savedH=rec.minutes!=null ? Number(rec.hours)||0 : Math.floor(savedTotal/60);
+  const savedM=rec.minutes!=null ? Number(rec.minutes)||0 : savedTotal%60;
+  document.getElementById("hours").value=savedH;
+  document.getElementById("minutes").value=savedM;
+  setWheelValue("hoursWheel",savedH);
+  setWheelValue("minutesWheel",savedM);
   document.getElementById("money").value=rec.money??"";
   document.getElementById("bonus").value=rec.bonus??"";
   const off=document.getElementById("dayoff");
   off.classList.toggle("active",!!rec.dayOff);
-  off.textContent=rec.dayOff?"Выходной ✓":"Выходной";
+  off.textContent=rec.dayOff?"Вихідний ✓":"Вихідний";
   renderCalendar();renderMonthStats();renderChart();
 }
 function getMonthStats(){
   const y=state.viewDate.getFullYear(),m=state.viewDate.getMonth();
-  let base=0,bonus=0,totalHours=0;
+  const RATE=10000;
+  let earned=0,bonus=0,totalHours=0,workDays=0;
   Object.entries(state.records).forEach(([k,r])=>{
     const d=dateFromKey(k);
     if(d.getFullYear()===y&&d.getMonth()===m){
-      base+=Number(r.money)||0;
-      bonus+=Number(r.bonus)||0;
-      totalHours+=Number(r.hours)||0;
+      if(r.dayOff===false){
+        workDays++;
+        totalHours+=Number(r.hours)||0;
+        earned+=Number(r.money)||0;
+        bonus+=Number(r.bonus)||0;
+      }
     }
   });
-  const daysInMonth=new Date(y,m+1,0).getDate();
-  let workDays=0;
-  for(let day=1;day<=daysInMonth;day++){
-    const d=new Date(y,m,day);
-    const r=state.records[key(d)];
-    if(r && r.dayOff===false) workDays++;
-  }
-  return {base,bonus,total:base+bonus,hours:totalHours,workDays};
+  return {rate:RATE,earned,bonus,total:RATE+earned+bonus,hours:totalHours,workDays};
 }
 function renderMonthStats(){
   const s=getMonthStats();
-  document.getElementById("monthMoney").textContent=money(s.total);
-  document.getElementById("monthHours").textContent=hours(s.hours);
-  document.getElementById("monthBase").textContent=money(s.base);
+  document.getElementById("monthRate").textContent=money(s.rate);
+  document.getElementById("monthEarned").textContent=money(s.earned);
   document.getElementById("monthBonus").textContent=money(s.bonus);
+  document.getElementById("monthTotal").textContent=money(s.total);
   document.getElementById("monthWorkDays").textContent=s.workDays;
-}
-function renderOperations(){
-  const items=Object.entries(state.records).sort((a,b)=>(b[1].savedAt||0)-(a[1].savedAt||0)).slice(0,5);
-  const el=document.getElementById("operations");
-  if(!items.length){el.innerHTML='<div class="empty">Операций пока нет</div>';return}
-  el.innerHTML=items.map(([k,r])=>{
-    const d=dateFromKey(k),total=(Number(r.money)||0)+(Number(r.bonus)||0);
-    return `<div class="operation"><div class="op-left">
-      <div class="op-date">${d.toLocaleDateString("ru-RU",{day:"numeric",month:"short",year:"numeric"})}</div>
-      <div class="op-sub">${hours(r.hours)} · ${money(r.money)}</div></div>
-      <div><div class="op-money">${money(total)}</div>${Number(r.bonus)?`<div class="op-bonus">+${money(r.bonus)} бонус</div>`:""}</div>
-    </div>`;
-  }).join("");
+  document.getElementById("monthHours").textContent=hours(s.hours);
 }
 function renderChart(){
   const canvas=document.getElementById("chart"),wrap=canvas.parentElement,dpr=Math.max(1,devicePixelRatio||1);
@@ -269,6 +312,8 @@ function renderChart(){
   const vals=[];
   for(let i=0;i<state.range;i++){const d=new Date(start);d.setDate(start.getDate()+i);const r=state.records[key(d)]||{};vals.push((Number(r.money)||0)+(Number(r.bonus)||0))}
   const max=Math.max(...vals,1),pad={l:8,r:8,t:18,b:30},cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;
+  const average=vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
+  document.getElementById("chartAverage").textContent="Середній заробіток: "+money(average)+" / день";
   c.strokeStyle="#282e3a";c.lineWidth=1;
   for(let i=0;i<4;i++){const y=pad.t+ch*i/3;c.beginPath();c.moveTo(pad.l,y);c.lineTo(w-pad.r,y);c.stroke()}
   const points=vals.map((v,i)=>({x:pad.l+i/(Math.max(vals.length-1,1))*cw,y:pad.t+ch-(v/max)*ch}));
@@ -276,9 +321,9 @@ function renderChart(){
   points.forEach((p,i)=>{if(vals[i]>0){c.beginPath();c.arc(p.x,p.y,3,0,Math.PI*2);c.fillStyle="#5b8cff";c.fill()}});
   c.fillStyle="#8d96a6";c.font="10px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif";
   const labels=Math.min(5,state.range);
-  for(let i=0;i<labels;i++){const idx=Math.round(i*(state.range-1)/(labels-1||1)),d=new Date(start);d.setDate(start.getDate()+idx);c.fillText(d.toLocaleDateString("ru-RU",{day:"numeric",month:"short"}),Math.max(0,points[idx].x-18),h-8)}
+  for(let i=0;i<labels;i++){const idx=Math.round(i*(state.range-1)/(labels-1||1)),d=new Date(start);d.setDate(start.getDate()+idx);c.fillText(d.toLocaleDateString("uk-UA",{day:"numeric",month:"short"}),Math.max(0,points[idx].x-18),h-8)}
 }
-function renderAll(){renderCalendar();renderMonthStats();renderOperations();renderChart()}
+function renderAll(){renderCalendar();renderMonthStats();renderChart()}
 
 document.getElementById("prevMonth").onclick=()=>{
   const day=state.selectedDate.getDate();
@@ -298,14 +343,16 @@ document.getElementById("nextMonth").onclick=()=>{
 document.getElementById("save").onclick=()=>{
   const k=key(state.selectedDate);
   const old=state.records[k]||{};
-  const h=Math.max(0,Number(document.getElementById("hours").value)||0);
+  const hInput=Math.max(0,Math.floor(Number(document.getElementById("hours").value)||0));
+  const minInput=Math.max(0,Math.min(59,Math.floor(Number(document.getElementById("minutes").value)||0)));
+  const h=hInput+minInput/60;
   const m=Math.max(0,Number(document.getElementById("money").value)||0);
   const b=Math.max(0,Number(document.getElementById("bonus").value)||0);
   if(h===0&&m===0&&b===0&&!old.dayOff) delete state.records[k];
-  else state.records[k]={hours:h,money:m,bonus:b,dayOff:false,savedAt:Date.now()};
+  else state.records[k]={hours:h,minutes:minInput,money:m,bonus:b,dayOff:false,savedAt:Date.now()};
   saveData();renderAll();selectDate(state.selectedDate);
-  const btn=document.getElementById("save");btn.textContent="Добавлено ✓";btn.classList.add("done");
-  setTimeout(()=>{btn.textContent="Сохранить";btn.classList.remove("done")},1600);
+  const btn=document.getElementById("save");btn.textContent="Додано ✓";btn.classList.add("done");
+  setTimeout(()=>{btn.textContent="Зберегти";btn.classList.remove("done")},1600);
 };
 
 document.getElementById("dayoff").onclick=()=>{
@@ -313,7 +360,7 @@ document.getElementById("dayoff").onclick=()=>{
   const old=state.records[k]||{};
   const now=old.dayOff!==true;
   if(now){
-    state.records[k]={hours:0,money:0,bonus:0,dayOff:true,savedAt:Date.now()};
+    state.records[k]={hours:0,minutes:0,money:0,bonus:0,dayOff:true,savedAt:Date.now()};
   }else{
     state.records[k]={hours:old.hours||0,money:old.money||0,bonus:old.bonus||0,dayOff:false,savedAt:Date.now()};
   }
@@ -330,9 +377,10 @@ document.getElementById("exportExcel").onclick=async()=>{
   const status=document.getElementById("exportStatus");
   const rows=Object.entries(state.records).sort((a,b)=>a[0].localeCompare(b[0])).map(([k,r])=>{
     const d=dateFromKey(k),base=Number(r.money)||0,bonus=Number(r.bonus)||0;
-    return {Дата:d.toLocaleDateString("ru-RU"),"Часы":Number(r.hours)||0,"Заработано":base,"Бонусы":bonus,"Итого":base+bonus};
+    const totalMin=Math.round((Number(r.hours)||0)*60),hh=Math.floor(totalMin/60),mm=totalMin%60;
+    return {Дата:d.toLocaleDateString("uk-UA"),"Години":hh,"Хвилини":mm,"Зароблено":base,"Бонуси":bonus,"Разом":base+bonus};
   });
-  if(!rows.length){status.textContent="Нет данных для экспорта";return}
+  if(!rows.length){status.textContent="Немає даних для експорту";return}
   try{
     if(!window.XLSX){
       await new Promise((resolve,reject)=>{
@@ -344,14 +392,14 @@ document.getElementById("exportExcel").onclick=async()=>{
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws,"Заработок");
     ws["!cols"]=[{wch:14},{wch:10},{wch:15},{wch:12},{wch:15}];
-    XLSX.writeFile(wb,"buffer_zarabotok.xlsx");
-    status.textContent="Excel-файл подготовлен ✓";
+    XLSX.writeFile(wb,"buffer_zarobitok.xlsx");
+    status.textContent="Excel-файл підготовлено ✓";
     setTimeout(()=>status.textContent="",2500);
   }catch(e){
-    const csv=["Дата;Часы;Заработано;Бонусы;Итого",...rows.map(r=>`${r.Дата};${r.Часы};${r.Заработано};${r.Бонусы};${r.Итого}`)].join("\n");
+    const csv=["Дата;Години;Заработано;Бонуси;Итого",...rows.map(r=>`${r.Дата};${r.Години};${r.Заработано};${r.Бонуси};${r.Итого}`)].join("\n");
     const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"});
-    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="buffer_zarabotok.csv";a.click();URL.revokeObjectURL(a.href);
-    status.textContent="Excel недоступен — сохранён CSV ✓";
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="buffer_zarobitok.csv";a.click();URL.revokeObjectURL(a.href);
+    status.textContent="Excel недоступний — збережено CSV ✓";
   }
 };
 
