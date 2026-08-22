@@ -154,256 +154,651 @@ canvas{width:100%;height:100%;display:block}
 </div>
 
 <script>
-const COOKIE_NAME="buffer_earnings_v2";
-const STORAGE_NAME="buffer_earnings_v2";
-const state={records:loadData(),viewDate:new Date(),selectedDate:new Date(),range:30};
+const STORAGE_NAME = "buffer_earnings_v3";
+const COOKIE_NAME = "buffer_earnings_v3";
+const OLD_STORAGE_NAME = "buffer_earnings_v2";
+const OLD_COOKIE_NAME = "buffer_earnings_v2";
 
-function loadData(){
-  try{
-    const cookie=document.cookie.split("; ").find(x=>x.startsWith(COOKIE_NAME+"="));
-    if(cookie){
-      const data=JSON.parse(decodeURIComponent(cookie.split("=").slice(1).join("=")));
-      if(data&&typeof data==="object")return data;
-    }
-  }catch(e){}
-  try{
-    const data=JSON.parse(localStorage.getItem(STORAGE_NAME)||"null");
-    if(data&&typeof data==="object")return data;
-  }catch(e){}
-  return {};
-}
-function saveData(){
-  const value=encodeURIComponent(JSON.stringify(state.records));
-  const expires=new Date();expires.setFullYear(expires.getFullYear()+5);
-  document.cookie=COOKIE_NAME+"="+value+"; expires="+expires.toUTCString()+"; path=/; SameSite=Lax";
-  try{localStorage.setItem(STORAGE_NAME,JSON.stringify(state.records))}catch(e){}
-}
-function key(date){
-  return date.getFullYear()+"-"+String(date.getMonth()+1).padStart(2,"0")+"-"+String(date.getDate()).padStart(2,"0");
-}
-function dateFromKey(k){const [y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d)}
-function sameDay(a,b){return key(a)===key(b)}
-function money(n){return Number(n||0).toLocaleString("uk-UA",{maximumFractionDigits:2})+" ₴"}
-function hours(n){
-  const total=Math.round((Number(n)||0)*60), h=Math.floor(total/60), m=total%60;
-  return h ? (m ? h+" ч "+m+" мин" : h+" ч") : m+" мин";
-}
-function startOfDay(d){return new Date(d.getFullYear(),d.getMonth(),d.getDate())}
-function formatDate(d){return d.toLocaleDateString("uk-UA",{day:"numeric",month:"long",year:"numeric"})}
-
-
-function isWeekend(date){
-  const d=date.getDay();
-  return d===0 || d===6;
-}
-function isDayOff(date){
-  const r=state.records[key(date)];
-  return !!(r && r.dayOff);
-}
-function isWorkDay(date){
-  const r=state.records[key(date)];
-  return !!(r && r.dayOff===false);
-}
-function getMonthKey(date){
-  return date.getFullYear()+"-"+String(date.getMonth()+1).padStart(2,"0");
-}
-function renderCalendar(){
-  const y=state.viewDate.getFullYear(),m=state.viewDate.getMonth(),first=new Date(y,m,1);
-  const offset=(first.getDay()+6)%7,total=new Date(y,m+1,0).getDate(),prevTotal=new Date(y,m,0).getDate();
-  document.getElementById("monthTitle").textContent=state.viewDate.toLocaleDateString("uk-UA",{month:"long",year:"numeric"});
-  const el=document.getElementById("days");el.innerHTML="";
-  for(let i=0;i<42;i++){
-    let n=i-offset+1,date;
-    if(n<1)date=new Date(y,m-1,prevTotal+n);
-    else if(n>total)date=new Date(y,m+1,n-total);
-    else date=new Date(y,m,n);
-    const b=document.createElement("button");b.className="day";
-    if(date.getMonth()!==m)b.classList.add("muted");
-    if(sameDay(date,new Date()))b.classList.add("today");
-    if(isDayOff(date))b.classList.add("dayoff");
-    if(sameDay(date,state.selectedDate))b.classList.add("selected");
-    if(state.records[key(date)] && !isDayOff(date))b.classList.add("has-data");
-    b.textContent=date.getDate();b.onclick=()=>selectDate(date);el.appendChild(b);
-  }
-}
-
-function initWheel(id,max,getValue,setValue){
-  const el=document.getElementById(id);
-  for(let i=0;i<=max;i++){
-    const item=document.createElement("div");
-    item.className="wheel-item";
-    item.dataset.value=i;
-    item.textContent=String(i).padStart(2,"0");
-    el.appendChild(item);
-  }
-  const refresh=()=>{
-    const center=el.scrollTop+el.clientHeight/2;
-    let best=null,dist=Infinity;
-    el.querySelectorAll(".wheel-item").forEach(item=>{
-      const d=Math.abs(item.offsetTop+item.offsetHeight/2-center);
-      item.classList.toggle("active",d<21);
-      if(d<dist){dist=d;best=item}
-    });
-    if(best)setValue(Number(best.dataset.value));
-  };
-  el.addEventListener("scroll",()=>{requestAnimationFrame(refresh)});
-  el.addEventListener("click",e=>{
-    const item=e.target.closest(".wheel-item");
-    if(item)el.scrollTo({top:item.offsetTop-38,behavior:"smooth"});
-  });
-  return el;
-}
-const hoursWheel=initWheel("hoursWheel",23,()=>Number(document.getElementById("hours").value),v=>document.getElementById("hours").value=v);
-const minutesWheel=initWheel("minutesWheel",59,()=>Number(document.getElementById("minutes").value),v=>document.getElementById("minutes").value=v);
-function setWheelValue(id,value){
-  const el=document.getElementById(id);
-  const item=el.querySelector(`[data-value="${Math.max(0,Math.min(id==="hoursWheel"?23:59,Number(value)||0))}"]`);
-  if(item){el.scrollTop=item.offsetTop-38;item.classList.add("active")}
-}
-function selectDate(date){
-  state.selectedDate=new Date(date);state.viewDate=new Date(date);
-  const rec=state.records[key(date)]||{};
-  document.getElementById("selectedDate").textContent=formatDate(date);
-  const savedTotal=Math.round((Number(rec.hours)||0)*60);
-  const savedH=rec.minutes!=null ? Number(rec.hours)||0 : Math.floor(savedTotal/60);
-  const savedM=rec.minutes!=null ? Number(rec.minutes)||0 : savedTotal%60;
-  document.getElementById("hours").value=savedH;
-  document.getElementById("minutes").value=savedM;
-  setWheelValue("hoursWheel",savedH);
-  setWheelValue("minutesWheel",savedM);
-  document.getElementById("money").value=rec.money??"";
-  document.getElementById("bonus").value=rec.bonus??"";
-  const off=document.getElementById("dayoff");
-  off.classList.toggle("active",!!rec.dayOff);
-  off.textContent=rec.dayOff?"Вихідний ✓":"Вихідний";
-  renderCalendar();renderMonthStats();renderChart();
-}
-function getMonthStats(){
-  const y=state.viewDate.getFullYear(),m=state.viewDate.getMonth();
-  const RATE=10000;
-  let earned=0,bonus=0,totalHours=0,workDays=0;
-  Object.entries(state.records).forEach(([k,r])=>{
-    const d=dateFromKey(k);
-    if(d.getFullYear()===y&&d.getMonth()===m){
-      if(r.dayOff===false){
-        workDays++;
-        totalHours+=Number(r.hours)||0;
-        earned+=Number(r.money)||0;
-        bonus+=Number(r.bonus)||0;
-      }
-    }
-  });
-  return {rate:RATE,earned,bonus,total:RATE+earned+bonus,hours:totalHours,workDays};
-}
-function renderMonthStats(){
-  const s=getMonthStats();
-  document.getElementById("monthRate").textContent=money(s.rate);
-  document.getElementById("monthEarned").textContent=money(s.earned);
-  document.getElementById("monthBonus").textContent=money(s.bonus);
-  document.getElementById("monthTotal").textContent=money(s.total);
-  document.getElementById("monthWorkDays").textContent=s.workDays;
-  document.getElementById("monthHours").textContent=hours(s.hours);
-}
-function renderChart(){
-  const canvas=document.getElementById("chart"),wrap=canvas.parentElement,dpr=Math.max(1,devicePixelRatio||1);
-  const w=wrap.clientWidth,h=wrap.clientHeight;canvas.width=w*dpr;canvas.height=h*dpr;
-  const c=canvas.getContext("2d");c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,w,h);
-  const end=startOfDay(state.selectedDate),start=new Date(end);start.setDate(start.getDate()-state.range+1);
-  const vals=[];
-  for(let i=0;i<state.range;i++){const d=new Date(start);d.setDate(start.getDate()+i);const r=state.records[key(d)]||{};vals.push((Number(r.money)||0)+(Number(r.bonus)||0))}
-  const max=Math.max(...vals,1),pad={l:8,r:8,t:18,b:30},cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;
-  const average=vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
-  document.getElementById("chartAverage").textContent="Середній заробіток: "+money(average)+" / день";
-  c.strokeStyle="#282e3a";c.lineWidth=1;
-  for(let i=0;i<4;i++){const y=pad.t+ch*i/3;c.beginPath();c.moveTo(pad.l,y);c.lineTo(w-pad.r,y);c.stroke()}
-  const points=vals.map((v,i)=>({x:pad.l+i/(Math.max(vals.length-1,1))*cw,y:pad.t+ch-(v/max)*ch}));
-  c.beginPath();points.forEach((p,i)=>i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y));c.strokeStyle="#5b8cff";c.lineWidth=2.5;c.stroke();
-  points.forEach((p,i)=>{if(vals[i]>0){c.beginPath();c.arc(p.x,p.y,3,0,Math.PI*2);c.fillStyle="#5b8cff";c.fill()}});
-  c.fillStyle="#8d96a6";c.font="10px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif";
-  const labels=Math.min(5,state.range);
-  for(let i=0;i<labels;i++){const idx=Math.round(i*(state.range-1)/(labels-1||1)),d=new Date(start);d.setDate(start.getDate()+idx);c.fillText(d.toLocaleDateString("uk-UA",{day:"numeric",month:"short"}),Math.max(0,points[idx].x-18),h-8)}
-}
-function renderAll(){renderCalendar();renderMonthStats();renderChart()}
-
-document.getElementById("prevMonth").onclick=()=>{
-  const day=state.selectedDate.getDate();
-  state.viewDate.setMonth(state.viewDate.getMonth()-1);
-  const max=new Date(state.viewDate.getFullYear(),state.viewDate.getMonth()+1,0).getDate();
-  state.selectedDate=new Date(state.viewDate.getFullYear(),state.viewDate.getMonth(),Math.min(day,max));
-  selectDate(state.selectedDate);
-}
-document.getElementById("nextMonth").onclick=()=>{
-  const day=state.selectedDate.getDate();
-  state.viewDate.setMonth(state.viewDate.getMonth()+1);
-  const max=new Date(state.viewDate.getFullYear(),state.viewDate.getMonth()+1,0).getDate();
-  state.selectedDate=new Date(state.viewDate.getFullYear(),state.viewDate.getMonth(),Math.min(day,max));
-  selectDate(state.selectedDate);
-}
-
-document.getElementById("save").onclick=()=>{
-  const k=key(state.selectedDate);
-  const old=state.records[k]||{};
-  const hInput=Math.max(0,Math.floor(Number(document.getElementById("hours").value)||0));
-  const minInput=Math.max(0,Math.min(59,Math.floor(Number(document.getElementById("minutes").value)||0)));
-  const h=hInput+minInput/60;
-  const m=Math.max(0,Number(document.getElementById("money").value)||0);
-  const b=Math.max(0,Number(document.getElementById("bonus").value)||0);
-  if(h===0&&m===0&&b===0&&!old.dayOff) delete state.records[k];
-  else state.records[k]={hours:h,minutes:minInput,money:m,bonus:b,dayOff:false,savedAt:Date.now()};
-  saveData();renderAll();selectDate(state.selectedDate);
-  const btn=document.getElementById("save");btn.textContent="Додано ✓";btn.classList.add("done");
-  setTimeout(()=>{btn.textContent="Зберегти";btn.classList.remove("done")},1600);
+const state = {
+  records: loadData(),
+  viewDate: new Date(),
+  selectedDate: new Date(),
+  range: 30
 };
 
-document.getElementById("dayoff").onclick=()=>{
-  const k=key(state.selectedDate);
-  const old=state.records[k]||{};
-  const now=old.dayOff!==true;
-  if(now){
-    state.records[k]={hours:0,minutes:0,money:0,bonus:0,dayOff:true,savedAt:Date.now()};
-  }else{
-    state.records[k]={hours:old.hours||0,money:old.money||0,bonus:old.bonus||0,dayOff:false,savedAt:Date.now()};
+function normalizeRecords(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return {};
+  const out = {};
+
+  for (const [k, raw] of Object.entries(data)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || !raw || typeof raw !== "object") continue;
+
+    let h = Number(raw.hours);
+    let min = Number(raw.minutes);
+
+    if (!Number.isFinite(h) || h < 0) h = 0;
+
+    // Старый формат мог хранить часы как десятичное число.
+    if (raw.minutes == null) {
+      const total = Math.round(h * 60);
+      h = Math.floor(total / 60);
+      min = total % 60;
+    } else {
+      h = Math.floor(h);
+      min = Number.isFinite(min) ? Math.floor(min) : 0;
+    }
+
+    out[k] = {
+      hours: Math.max(0, Math.min(23, h)),
+      minutes: Math.max(0, Math.min(59, min)),
+      money: Math.max(0, Number(raw.money) || 0),
+      bonus: Math.max(0, Number(raw.bonus) || 0),
+      dayOff: raw.dayOff === true,
+      savedAt: Number(raw.savedAt) || Date.now()
+    };
   }
+  return out;
+}
+
+function readLocalStorage(name) {
+  try {
+    const value = localStorage.getItem(name);
+    return value ? normalizeRecords(JSON.parse(value)) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function readCookie(name) {
+  try {
+    const prefix = name + "=";
+    const item = document.cookie.split(";").map(x => x.trim())
+      .find(x => x.startsWith(prefix));
+    if (!item) return null;
+    return normalizeRecords(JSON.parse(decodeURIComponent(item.slice(prefix.length))));
+  } catch (e) {
+    return null;
+  }
+}
+
+function loadData() {
+  let data = readLocalStorage(STORAGE_NAME);
+  if (data && Object.keys(data).length) return data;
+
+  data = readCookie(COOKIE_NAME);
+  if (data && Object.keys(data).length) return data;
+
+  // Автоматическая миграция старых данных.
+  data = readLocalStorage(OLD_STORAGE_NAME);
+  if (data && Object.keys(data).length) {
+    data = normalizeRecords(data);
+    persistData(data);
+    return data;
+  }
+
+  data = readCookie(OLD_COOKIE_NAME);
+  if (data && Object.keys(data).length) {
+    data = normalizeRecords(data);
+    persistData(data);
+    return data;
+  }
+
+  return {};
+}
+
+function persistData(records) {
+  const json = JSON.stringify(records);
+
+  try {
+    localStorage.setItem(STORAGE_NAME, json);
+  } catch (e) {
+    console.warn("localStorage недоступен", e);
+  }
+
+  try {
+    const expires = new Date();
+    expires.setFullYear(expires.getFullYear() + 5);
+    document.cookie =
+      COOKIE_NAME + "=" + encodeURIComponent(json) +
+      "; expires=" + expires.toUTCString() +
+      "; path=/; SameSite=Lax";
+  } catch (e) {
+    console.warn("Cookie недоступны", e);
+  }
+}
+
+function saveData() {
+  persistData(state.records);
+}
+
+function key(date) {
+  return date.getFullYear() + "-" +
+    String(date.getMonth() + 1).padStart(2, "0") + "-" +
+    String(date.getDate()).padStart(2, "0");
+}
+
+function dateFromKey(k) {
+  const [y, m, d] = k.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function sameDay(a, b) { return key(a) === key(b); }
+
+function money(n) {
+  return Number(n || 0).toLocaleString("uk-UA", {
+    maximumFractionDigits: 2
+  }) + " ₴";
+}
+
+function hours(n) {
+  const total = Math.round((Number(n) || 0) * 60);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (h) return m ? h + " ч " + m + " мин" : h + " ч";
+  return m + " мин";
+}
+
+function startOfDay(d) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function formatDate(d) {
+  return d.toLocaleDateString("uk-UA", {
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  });
+}
+
+function isDayOff(date) {
+  const r = state.records[key(date)];
+  return !!(r && r.dayOff);
+}
+
+function renderCalendar() {
+  const y = state.viewDate.getFullYear();
+  const m = state.viewDate.getMonth();
+  const first = new Date(y, m, 1);
+  const offset = (first.getDay() + 6) % 7;
+  const total = new Date(y, m + 1, 0).getDate();
+  const prevTotal = new Date(y, m, 0).getDate();
+
+  document.getElementById("monthTitle").textContent =
+    state.viewDate.toLocaleDateString("uk-UA", {
+      month: "long", year: "numeric"
+    });
+
+  const el = document.getElementById("days");
+  el.innerHTML = "";
+
+  for (let i = 0; i < 42; i++) {
+    let n = i - offset + 1;
+    let date;
+
+    if (n < 1) date = new Date(y, m - 1, prevTotal + n);
+    else if (n > total) date = new Date(y, m + 1, n - total);
+    else date = new Date(y, m, n);
+
+    const b = document.createElement("button");
+    b.className = "day";
+
+    if (date.getMonth() !== m) b.classList.add("muted");
+    if (sameDay(date, new Date())) b.classList.add("today");
+    if (isDayOff(date)) b.classList.add("dayoff");
+    if (sameDay(date, state.selectedDate)) b.classList.add("selected");
+    if (state.records[key(date)]) b.classList.add("has-data");
+
+    b.textContent = date.getDate();
+    b.onclick = () => selectDate(date);
+    el.appendChild(b);
+  }
+}
+
+function initWheel(id, max, setValue) {
+  const el = document.getElementById(id);
+
+  for (let i = 0; i <= max; i++) {
+    const item = document.createElement("div");
+    item.className = "wheel-item";
+    item.dataset.value = i;
+    item.textContent = String(i).padStart(2, "0");
+    el.appendChild(item);
+  }
+
+  const refresh = () => {
+    const center = el.scrollTop + el.clientHeight / 2;
+    let best = null;
+    let dist = Infinity;
+
+    el.querySelectorAll(".wheel-item").forEach(item => {
+      const d = Math.abs(
+        item.offsetTop + item.offsetHeight / 2 - center
+      );
+      item.classList.toggle("active", d < 21);
+      if (d < dist) {
+        dist = d;
+        best = item;
+      }
+    });
+
+    if (best) setValue(Number(best.dataset.value));
+  };
+
+  el.addEventListener("scroll", () => requestAnimationFrame(refresh));
+
+  el.addEventListener("click", e => {
+    const item = e.target.closest(".wheel-item");
+    if (item) {
+      el.scrollTo({
+        top: item.offsetTop - 38,
+        behavior: "smooth"
+      });
+    }
+  });
+
+  return el;
+}
+
+initWheel("hoursWheel", 23,
+  v => document.getElementById("hours").value = v);
+
+initWheel("minutesWheel", 59,
+  v => document.getElementById("minutes").value = v);
+
+function setWheelValue(id, value) {
+  const el = document.getElementById(id);
+  const max = id === "hoursWheel" ? 23 : 59;
+  let v = Number(value);
+
+  if (!Number.isFinite(v)) v = 0;
+  v = Math.max(0, Math.min(max, Math.floor(v)));
+
+  const item = el.querySelector(`[data-value="${v}"]`);
+
+  if (item) {
+    el.scrollTop = Math.max(0, item.offsetTop - 38);
+    el.querySelectorAll(".wheel-item").forEach(x =>
+      x.classList.remove("active")
+    );
+    item.classList.add("active");
+  }
+}
+
+function selectDate(date) {
+  state.selectedDate = new Date(
+    date.getFullYear(), date.getMonth(), date.getDate()
+  );
+  state.viewDate = new Date(state.selectedDate);
+
+  const rec = state.records[key(state.selectedDate)] || {};
+
+  document.getElementById("selectedDate").textContent =
+    formatDate(state.selectedDate);
+
+  // Время восстанавливается именно из сохранённых часов и минут.
+  const savedH = Math.max(0, Math.min(23, Number(rec.hours) || 0));
+  const savedM = Math.max(0, Math.min(59, Number(rec.minutes) || 0));
+
+  document.getElementById("hours").value = savedH;
+  document.getElementById("minutes").value = savedM;
+
+  setWheelValue("hoursWheel", savedH);
+  setWheelValue("minutesWheel", savedM);
+
+  document.getElementById("money").value =
+    rec.money != null ? rec.money : "";
+
+  document.getElementById("bonus").value =
+    rec.bonus != null ? rec.bonus : "";
+
+  const off = document.getElementById("dayoff");
+  off.classList.toggle("active", rec.dayOff === true);
+  off.textContent = rec.dayOff === true ? "Вихідний ✓" : "Вихідний";
+
+  renderCalendar();
+  renderMonthStats();
+  renderChart();
+}
+
+function getMonthStats() {
+  const y = state.viewDate.getFullYear();
+  const m = state.viewDate.getMonth();
+  const RATE = 10000;
+
+  let earned = 0, bonus = 0, totalHours = 0, workDays = 0;
+
+  Object.entries(state.records).forEach(([k, r]) => {
+    const d = dateFromKey(k);
+
+    if (d.getFullYear() === y && d.getMonth() === m &&
+        r.dayOff === false) {
+      workDays++;
+      totalHours += (Number(r.hours) || 0) +
+        (Number(r.minutes) || 0) / 60;
+      earned += Number(r.money) || 0;
+      bonus += Number(r.bonus) || 0;
+    }
+  });
+
+  return {
+    rate: RATE,
+    earned,
+    bonus,
+    total: RATE + earned + bonus,
+    hours: totalHours,
+    workDays
+  };
+}
+
+function renderMonthStats() {
+  const s = getMonthStats();
+
+  document.getElementById("monthRate").textContent = money(s.rate);
+  document.getElementById("monthEarned").textContent = money(s.earned);
+  document.getElementById("monthBonus").textContent = money(s.bonus);
+  document.getElementById("monthTotal").textContent = money(s.total);
+  document.getElementById("monthWorkDays").textContent = s.workDays;
+  document.getElementById("monthHours").textContent = hours(s.hours);
+}
+
+function renderChart() {
+  const canvas = document.getElementById("chart");
+  const wrap = canvas.parentElement;
+  const dpr = Math.max(1, devicePixelRatio || 1);
+  const w = wrap.clientWidth;
+  const h = wrap.clientHeight;
+
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+
+  const c = canvas.getContext("2d");
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, w, h);
+
+  const end = startOfDay(state.selectedDate);
+  const start = new Date(end);
+  start.setDate(start.getDate() - state.range + 1);
+
+  const vals = [];
+
+  for (let i = 0; i < state.range; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const r = state.records[key(d)] || {};
+
+    vals.push(
+      (Number(r.money) || 0) +
+      (Number(r.bonus) || 0)
+    );
+  }
+
+  const max = Math.max(...vals, 1);
+  const pad = {l:8,r:8,t:18,b:30};
+  const cw = w - pad.l - pad.r;
+  const ch = h - pad.t - pad.b;
+
+  const average = vals.length ?
+    vals.reduce((a,b) => a + b, 0) / vals.length : 0;
+
+  document.getElementById("chartAverage").textContent =
+    "Середній заробіток: " + money(average) + " / день";
+
+  c.strokeStyle = "#282e3a";
+  c.lineWidth = 1;
+
+  for (let i = 0; i < 4; i++) {
+    const y = pad.t + ch * i / 3;
+    c.beginPath();
+    c.moveTo(pad.l, y);
+    c.lineTo(w - pad.r, y);
+    c.stroke();
+  }
+
+  const points = vals.map((v,i) => ({
+    x: pad.l + i / Math.max(vals.length-1,1) * cw,
+    y: pad.t + ch - (v/max) * ch
+  }));
+
+  c.beginPath();
+  points.forEach((p,i) => i ? c.lineTo(p.x,p.y) : c.moveTo(p.x,p.y));
+  c.strokeStyle = "#5b8cff";
+  c.lineWidth = 2.5;
+  c.stroke();
+
+  points.forEach((p,i) => {
+    if (vals[i] > 0) {
+      c.beginPath();
+      c.arc(p.x,p.y,3,0,Math.PI*2);
+      c.fillStyle = "#5b8cff";
+      c.fill();
+    }
+  });
+
+  c.fillStyle = "#8d96a6";
+  c.font = "10px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif";
+
+  const labels = Math.min(5,state.range);
+  for (let i=0;i<labels;i++) {
+    const idx = Math.round(
+      i*(state.range-1)/(labels-1||1)
+    );
+    const d = new Date(start);
+    d.setDate(start.getDate()+idx);
+
+    c.fillText(
+      d.toLocaleDateString("uk-UA", {
+        day:"numeric", month:"short"
+      }),
+      Math.max(0,points[idx].x-18),
+      h-8
+    );
+  }
+}
+
+function renderAll() {
+  renderCalendar();
+  renderMonthStats();
+  renderChart();
+}
+
+/* Сохранение записи */
+document.getElementById("save").onclick = () => {
+  const k = key(state.selectedDate);
+  const old = state.records[k] || {};
+
+  const h = Math.max(0, Math.min(23,
+    Math.floor(Number(document.getElementById("hours").value) || 0)));
+
+  const min = Math.max(0, Math.min(59,
+    Math.floor(Number(document.getElementById("minutes").value) || 0)));
+
+  const m = Math.max(0,
+    Number(document.getElementById("money").value) || 0);
+
+  const b = Math.max(0,
+    Number(document.getElementById("bonus").value) || 0);
+
+  if (h === 0 && min === 0 && m === 0 && b === 0 && !old.dayOff) {
+    delete state.records[k];
+  } else {
+    state.records[k] = {
+      hours: h,
+      minutes: min,
+      money: m,
+      bonus: b,
+      dayOff: false,
+      savedAt: Date.now()
+    };
+  }
+
+  saveData();
+  selectDate(state.selectedDate);
+
+  const btn = document.getElementById("save");
+  btn.textContent = "Додано ✓";
+  btn.classList.add("done");
+
+  setTimeout(() => {
+    btn.textContent = "Зберегти";
+    btn.classList.remove("done");
+  }, 1600);
+};
+
+/* Выходной */
+document.getElementById("dayoff").onclick = () => {
+  const k = key(state.selectedDate);
+  const old = state.records[k] || {};
+
+  if (old.dayOff !== true) {
+    state.records[k] = {
+      hours: 0,
+      minutes: 0,
+      money: 0,
+      bonus: 0,
+      dayOff: true,
+      savedAt: Date.now()
+    };
+  } else {
+    state.records[k] = {
+      hours: Number(old.hours) || 0,
+      minutes: Number(old.minutes) || 0,
+      money: Number(old.money) || 0,
+      bonus: Number(old.bonus) || 0,
+      dayOff: false,
+      savedAt: Date.now()
+    };
+  }
+
   saveData();
   selectDate(state.selectedDate);
 };
 
-document.querySelectorAll(".tab").forEach(btn=>btn.onclick=()=>{
-  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
-  btn.classList.add("active");state.range=Number(btn.dataset.range);renderChart();
+/* Месяцы */
+document.getElementById("prevMonth").onclick = () => {
+  const day = state.selectedDate.getDate();
+  state.viewDate.setMonth(state.viewDate.getMonth() - 1);
+
+  const max = new Date(
+    state.viewDate.getFullYear(),
+    state.viewDate.getMonth()+1, 0
+  ).getDate();
+
+  state.selectedDate = new Date(
+    state.viewDate.getFullYear(),
+    state.viewDate.getMonth(),
+    Math.min(day,max)
+  );
+
+  selectDate(state.selectedDate);
+};
+
+document.getElementById("nextMonth").onclick = () => {
+  const day = state.selectedDate.getDate();
+  state.viewDate.setMonth(state.viewDate.getMonth() + 1);
+
+  const max = new Date(
+    state.viewDate.getFullYear(),
+    state.viewDate.getMonth()+1, 0
+  ).getDate();
+
+  state.selectedDate = new Date(
+    state.viewDate.getFullYear(),
+    state.viewDate.getMonth(),
+    Math.min(day,max)
+  );
+
+  selectDate(state.selectedDate);
+};
+
+/* График */
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll(".tab")
+      .forEach(x => x.classList.remove("active"));
+
+    btn.classList.add("active");
+    state.range = Number(btn.dataset.range);
+    renderChart();
+  };
 });
 
-document.getElementById("exportExcel").onclick=async()=>{
-  const status=document.getElementById("exportStatus");
-  const rows=Object.entries(state.records).sort((a,b)=>a[0].localeCompare(b[0])).map(([k,r])=>{
-    const d=dateFromKey(k),base=Number(r.money)||0,bonus=Number(r.bonus)||0;
-    const totalMin=Math.round((Number(r.hours)||0)*60),hh=Math.floor(totalMin/60),mm=totalMin%60;
-    return {Дата:d.toLocaleDateString("uk-UA"),"Години":hh,"Хвилини":mm,"Зароблено":base,"Бонуси":bonus,"Разом":base+bonus};
-  });
-  if(!rows.length){status.textContent="Немає даних для експорту";return}
-  try{
-    if(!window.XLSX){
-      await new Promise((resolve,reject)=>{
-        const s=document.createElement("script");s.src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js";
-        s.onload=resolve;s.onerror=reject;document.head.appendChild(s);
+/* Excel */
+document.getElementById("exportExcel").onclick = async () => {
+  const status = document.getElementById("exportStatus");
+
+  const rows = Object.entries(state.records)
+    .sort((a,b) => a[0].localeCompare(b[0]))
+    .map(([k,r]) => {
+      const d = dateFromKey(k);
+      const base = Number(r.money) || 0;
+      const bonus = Number(r.bonus) || 0;
+
+      return {
+        "Дата": d.toLocaleDateString("uk-UA"),
+        "Години": Number(r.hours) || 0,
+        "Хвилини": Number(r.minutes) || 0,
+        "Зароблено": base,
+        "Бонуси": bonus,
+        "Разом": base + bonus,
+        "Вихідний": r.dayOff ? "Так" : "Ні"
+      };
+    });
+
+  if (!rows.length) {
+    status.textContent = "Немає даних для експорту";
+    return;
+  }
+
+  try {
+    if (!window.XLSX) {
+      await new Promise((resolve,reject) => {
+        const s = document.createElement("script");
+        s.src =
+          "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js";
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
       });
     }
-    const ws=XLSX.utils.json_to_sheet(rows);
-    const wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,ws,"Заработок");
-    ws["!cols"]=[{wch:14},{wch:10},{wch:15},{wch:12},{wch:15}];
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(wb,ws,"Заробіток");
     XLSX.writeFile(wb,"buffer_zarobitok.xlsx");
-    status.textContent="Excel-файл підготовлено ✓";
-    setTimeout(()=>status.textContent="",2500);
-  }catch(e){
-    const csv=["Дата;Години;Заработано;Бонуси;Итого",...rows.map(r=>`${r.Дата};${r.Години};${r.Заработано};${r.Бонуси};${r.Итого}`)].join("\n");
-    const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"});
-    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="buffer_zarobitok.csv";a.click();URL.revokeObjectURL(a.href);
-    status.textContent="Excel недоступний — збережено CSV ✓";
+
+    status.textContent = "Excel-файл підготовлено ✓";
+    setTimeout(() => status.textContent="",2500);
+
+  } catch(e) {
+    const csv = [
+      "Дата;Години;Хвилини;Зароблено;Бонуси;Разом;Вихідний",
+      ...rows.map(r => [
+        r["Дата"],r["Години"],r["Хвилини"],
+        r["Зароблено"],r["Бонуси"],r["Разом"],r["Вихідний"]
+      ].join(";"))
+    ].join("\n");
+
+    const blob = new Blob(
+      ["\ufeff"+csv],
+      {type:"text/csv;charset=utf-8"}
+    );
+
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "buffer_zarobitok.csv";
+    a.click();
+
+    setTimeout(() => URL.revokeObjectURL(a.href),1000);
+    status.textContent = "Excel недоступний — збережено CSV ✓";
   }
 };
 
-window.addEventListener("resize",renderChart);
+/* Дополнительная страховка */
+window.addEventListener("pagehide", saveData);
+window.addEventListener("beforeunload", saveData);
+window.addEventListener("resize", renderChart);
+
 selectDate(new Date());
 </script>
 </body>
