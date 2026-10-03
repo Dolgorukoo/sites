@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#f7f7f5">
 <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
 <title>Гід Шаурми</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <style>
 :root{--bg:#f6f6f4;--surface:#fff;--soft:#f0f0ed;--text:#161616;--muted:#7a7a75;--line:#dfdfda;--accent:#ea6a2a;--accent-soft:#fff0e7;--blue:#147ef5;--danger:#d94b4b;--shadow:0 8px 24px rgba(0,0,0,.10);--font:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF UI Display","Segoe UI",Roboto,Arial,sans-serif}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -39,12 +40,22 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
 .map-error{position:absolute;inset:0;z-index:100;display:none;align-items:center;justify-content:center;padding:24px;text-align:center;background:#eef0ee}.map-error.open{display:flex}.map-error-card{max-width:300px;background:#fff;border:1px solid var(--line);border-radius:18px;padding:18px}.map-error-card svg{width:34px;height:34px;color:var(--accent);margin-bottom:8px}.map-error-card b{display:block;font-size:15px}.map-error-card span{display:block;margin-top:5px;font-size:11px;color:#888;line-height:1.45}
 @media(max-width:360px){.bottom-bar{grid-template-columns:minmax(0,1fr) 46px 46px 104px;gap:6px}.control{height:48px;min-width:46px;border-radius:14px}.add-btn{height:48px;min-width:104px;padding:0 11px;border-radius:14px;font-size:13px}.add-btn.placing{min-width:140px}.search-placeholder{font-size:13px}.hours-row{grid-template-columns:32px minmax(0,1fr) 48px}.menu-row{grid-template-columns:minmax(0,1fr) 78px 42px}}
 @media(min-width:769px){#app{display:none}.desktop{display:flex}}
+
+/* Leaflet base map */
+.leaflet-map{position:absolute;inset:0;z-index:1;background:#e9ecea}
+.leaflet-container{width:100%;height:100%;font:inherit;background:#e9ecea;touch-action:none}
+.leaflet-control-attribution{font-size:9px!important;line-height:14px!important;padding:0 5px!important;border-radius:7px 0 0 0;background:rgba(255,255,255,.78)!important;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.leaflet-marker-icon.custom-map-marker{background:transparent!important;border:0!important}
+.leaflet-marker-pane{z-index:650}
+#tiles,#markers,#userAccuracy,#userDot,#searchMarker{display:none!important}
 </style>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 </head>
 <body>
 <div class="desktop"><div class="desktop-inner"><div class="desk-icon" id="deskIcon"></div><h1>Поки що тільки для мобільних пристроїв</h1><p>«Гід Шаурми» оптимізований для телефона. Версія для ПК — у розробці.</p></div></div>
 <div id="app">
   <div id="map">
+    <div id="leafletMap" class="leaflet-map"></div>
     <div class="tile-layer" id="tiles"></div>
     <div class="markers-layer" id="markers"></div>
     <div id="userAccuracy" class="user-accuracy"></div>
@@ -121,7 +132,7 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
 <script>
 (() => {
   "use strict";
-  const APP_VERSION="1.7";
+  const APP_VERSION="1.8";
   const KEY="shawarma_guide_v4";
   const OLD_KEYS=["shawarma_guide_v3","shawarma_guide_v2"];
   const TILE_SIZE=256;
@@ -136,30 +147,81 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
   const svg=(name,cls="")=>{const p={search:'<circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="m16 16 5 5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>',locate:'<circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.8" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',more:'<circle cx="5" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="19" cy="12" r="1.7" fill="currentColor"/>',plus:'<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',minus:'<path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',x:'<path d="m6 6 12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',check:'<path d="m5 12 4 4 10-10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',pin:'<path d="M12 21s6-5.15 6-10a6 6 0 1 0-12 0c0 4.85 6 10 6 10Z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="11" r="2" fill="currentColor"/>',food:'<path d="M6 3v7M4 3v4M8 3v4M6 10v11M17 3v18M14 3c2 0 3 1.6 3 4s-1 4-3 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',pen:'<path d="m14 5 5 5M5 19l3.2-.7L19 7.5a2.1 2.1 0 0 0-3-3L5.2 15.3 5 19Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',download:'<path d="M12 3v11M8 10l4 4 4-4M4 20h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',upload:'<path d="M12 16V5M8 9l4-4 4 4M4 20h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',trash:'<path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',photo:'<rect x="4" y="5" width="16" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="10" r="1.5" fill="currentColor"/><path d="m6 17 4-4 3 3 2-2 3 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',phone:'<path d="M7 3 4.5 5.5c0 5 2.5 9 6.9 11.9L14 15l3 1.5 2.5-2.5-2-3-3 1.2A13 13 0 0 1 8.3 6L9.5 3 7 3Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',star:'<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z" fill="currentColor"/>',starOutline:'<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z" fill="none" stroke="currentColor" stroke-width="1.6"/>',map:'<path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 3v15M15 6v15" fill="none" stroke="currentColor" stroke-width="1.8"/>',info:'<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v6M12 7h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',globe:'<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" fill="none" stroke="currentColor" stroke-width="1.6"/>',warning:'<path d="m12 3 9 16H3L12 3Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 9v4M12 16h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>'};return `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${p[name]||p.info}</svg>`};
   $('searchIcon').innerHTML=svg('search');$('locateIcon').innerHTML=svg('locate');$('dataIcon').innerHTML=svg('more');$('addIcon').innerHTML=svg('plus');$('closeEditor').innerHTML=svg('x');$('closeDetails').innerHTML=svg('x');$('closeReview').innerHTML=svg('x');$('closeSearch').innerHTML=svg('x');$('closeData').innerHTML=svg('x');$('placeIcon').innerHTML=svg('pin');$('addMenu').innerHTML=svg('plus')+'<span>Додати вид шаурми</span>';$('editPoint').innerHTML=svg('pen')+'<span>Редагувати</span>';$('addReview').innerHTML=svg('plus')+'<span>Відгук</span>';$('savePoint').innerHTML=svg('check')+'<span>Зберегти</span>';$('saveReview').innerHTML=svg('check')+'<span>Додати відгук</span>';$('searchSheetIcon').innerHTML=svg('search');$('clearSearch').innerHTML=svg('x');$('exportData').innerHTML=svg('download')+'<span>Експорт</span>';$('importData').innerHTML=svg('upload')+'<span>Імпорт</span>';$('clearData').innerHTML=svg('trash')+'<span>Видалити всі дані</span>';$('toastIcon').innerHTML=svg('check');$('deskIcon').innerHTML=svg('food');$('mapErrorIcon').innerHTML=svg('warning');
   let state={points:[],selectedId:null,editId:null,latlng:null,place:null,photos:[],menu:[{name:'',price:''}],tags:new Set(),rating:5,placing:false};
-  let map={center:{...DEFAULT_CENTER},zoom:DEFAULT_CENTER.zoom,dragging:false,dragStart:null,centerStart:null,tileToken:0};
+  let map={center:{lat:DEFAULT_CENTER.lat,lng:DEFAULT_CENTER.lng},zoom:DEFAULT_CENTER.zoom,dragging:false,dragStart:null,centerStart:null,tileToken:0,leaflet:null,markerLayer:null,userLayer:null,searchLayer:null};
   let userPos=null, searchPos=null, locationWatch=null, searchTimer=null, searchAbort=null, toastTimer=null;
   const lng2x=(lng,z)=>((lng+180)/360)*Math.pow(2,z)*TILE_SIZE;
   const lat2y=(lat,z)=>{const r=lat*Math.PI/180;return (1-Math.asinh(Math.tan(r))/Math.PI)/2*Math.pow(2,z)*TILE_SIZE};
   const x2lng=(x,z)=>x/(Math.pow(2,z)*TILE_SIZE)*360-180;
   const y2lat=(y,z)=>Math.atan(Math.sinh(Math.PI*(1-2*y/(Math.pow(2,z)*TILE_SIZE))))*180/Math.PI;
-  function setCenter(lat,lng,zoom=map.zoom){map.center={lat:clamp(lat,-85,85),lng:((lng+540)%360)-180};map.zoom=clamp(zoom,3,19);renderMap();}
-  function screenPoint(lat,lng){const worldX=lng2x(lng,map.zoom),worldY=lat2y(lat,map.zoom),cx=lng2x(map.center.lng,map.zoom),cy=lat2y(map.center.lat,map.zoom);return{x:window.innerWidth/2+(worldX-cx),y:window.innerHeight/2+(worldY-cy)};}
+  function syncMapState(){
+    if(!map.leaflet)return;
+    const c=map.leaflet.getCenter();
+    map.center={lat:c.lat,lng:((c.lng+540)%360)-180};
+    map.zoom=clamp(map.leaflet.getZoom(),3,19);
+    map.dragging=map.leaflet.dragging?.enabled?.() ? map.leaflet.dragging._draggable?._moving===true : false;
+  }
+  function setCenter(lat,lng,zoom=map.zoom,animate=true){
+    lat=clamp(Number(lat),-85,85);
+    lng=((Number(lng)+540)%360)-180;
+    zoom=clamp(Number(zoom),3,19);
+    if(map.leaflet){
+      map.leaflet.setView([lat,lng],zoom,{animate:!!animate,duration:.28,easeLinearity:.18});
+      map.center={lat,lng};map.zoom=zoom;
+      if(!animate)renderMap();
+    }else{
+      map.center={lat,lng};map.zoom=zoom;
+    }
+  }
+  function screenPoint(lat,lng){
+    if(!map.leaflet)return{x:window.innerWidth/2,y:window.innerHeight/2};
+    const p=map.leaflet.latLngToContainerPoint([lat,lng]);
+    return{x:p.x,y:p.y};
+  }
   function renderMap(){
-    const all=[$('tiles'),$('markers'),$('userAccuracy'),$('userDot'),$('searchMarker')];
-    all.forEach(x=>{if(x)x.style.transform=''});
-    renderTiles();
+    syncMapState();
     renderMarkers();
     renderUser();
     renderSearchPos();
-    renderedCenter={...map.center};
-    renderedZoom=map.zoom;
   }
-  function renderTiles(){const layer=$('tiles');const z=Math.round(clamp(map.zoom,3,19));map.zoom=z;const world=Math.pow(2,z)*TILE_SIZE,cx=lng2x(map.center.lng,z),cy=lat2y(map.center.lat,z),cols=Math.ceil(window.innerWidth/TILE_SIZE)+3,rows=Math.ceil(window.innerHeight/TILE_SIZE)+3,startX=Math.floor((cx-window.innerWidth/2)/TILE_SIZE)-1,startY=Math.floor((cy-window.innerHeight/2)/TILE_SIZE)-1;layer.innerHTML='';for(let dy=0;dy<rows;dy++){for(let dx=0;dx<cols;dx++){const tx=startX+dx,ty=startY+dy;if(ty<0||ty>=Math.pow(2,z))continue;const wrapped=((tx%Math.pow(2,z))+Math.pow(2,z))%Math.pow(2,z);const left=(tx*TILE_SIZE)-(cx-window.innerWidth/2),top=(ty*TILE_SIZE)-(cy-window.innerHeight/2);const img=document.createElement('img');img.className='tile';img.alt='';img.draggable=false;img.loading='eager';img.referrerPolicy='no-referrer';img.src=`https://tile.openstreetmap.org/${z}/${wrapped}/${ty}.png`;img.style.left=left+'px';img.style.top=top+'px';img.onerror=()=>{if(img.dataset.fallback!=='1'){img.dataset.fallback='1';img.src=`https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${z}/${ty}/${wrapped}`}else{img.style.background='#e9ecea'}};layer.appendChild(img)}}}
-  function renderMarkers(){const layer=$('markers');layer.innerHTML='';const q=$('searchInput').value.trim().toLowerCase();const points=state.points.filter(p=>validPoint(p)).filter(p=>!q||searchable(p).includes(q));for(const p of points){const pt=screenPoint(Number(p.lat),Number(p.lng));if(pt.x<-90||pt.x>window.innerWidth+90||pt.y<-110||pt.y>window.innerHeight+110)continue;const el=document.createElement('button');el.className='map-marker';el.type='button';el.style.left=pt.x+'px';el.style.top=pt.y+'px';const a=avgRating(p);el.innerHTML=`<div class="marker-rating"><span class="star">★</span><span>${a===null?'~':a.toFixed(1)}</span></div><div class="marker-pin">${svg('food')}</div>`;el.addEventListener('pointerdown',e=>{e.stopPropagation();});
-      el.addEventListener('pointerup',e=>{e.stopPropagation();});
-      el.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();openDetails(p.id)});layer.appendChild(el)}}
-  function renderUser(){const dot=$('userDot'),acc=$('userAccuracy');if(!userPos){dot.style.display='none';acc.style.display='none';return}const pt=screenPoint(userPos.lat,userPos.lng);dot.style.display='block';dot.style.left=pt.x+'px';dot.style.top=pt.y+'px';const m1=screenPoint(userPos.lat,userPos.lng),m2=screenPoint(userPos.lat,userPos.lng+((userPos.accuracy||0)/111320));const radius=Math.max(7,Math.abs(m2.x-m1.x));acc.style.display='block';acc.style.width=(radius*2)+'px';acc.style.height=(radius*2)+'px';acc.style.left=(pt.x-radius)+'px';acc.style.top=(pt.y-radius)+'px'}
-  function renderSearchPos(){const el=$('searchMarker');if(!searchPos){el.style.display='none';return}const pt=screenPoint(searchPos.lat,searchPos.lng);el.style.display='block';el.style.left=pt.x+'px';el.style.top=pt.y+'px'}
+  function renderTiles(){}
+  function markerIcon(p){
+    const a=avgRating(p);
+    return L.divIcon({
+      className:'custom-map-marker',
+      html:`<button type="button" class="map-marker" aria-label="${esc(p.name||'Точка')}"><div class="marker-rating"><span class="star">★</span><span>${a===null?'~':a.toFixed(1)}</span></div><div class="marker-pin">${svg('food')}</div></button>`,
+      iconSize:[62,72],
+      iconAnchor:[31,69],
+      popupAnchor:[0,-69]
+    });
+  }
+  function renderMarkers(){
+    if(!map.leaflet)return;
+    if(!map.markerLayer)map.markerLayer=L.layerGroup().addTo(map.leaflet);
+    map.markerLayer.clearLayers();
+    const q=$('searchInput').value.trim().toLowerCase();
+    const points=state.points.filter(p=>validPoint(p)).filter(p=>!q||searchable(p).includes(q));
+    for(const p of points){
+      const marker=L.marker([Number(p.lat),Number(p.lng)],{icon:markerIcon(p),keyboard:false,riseOnHover:false});
+      marker.on('click',()=>openDetails(p.id));
+      map.markerLayer.addLayer(marker);
+    }
+  }
+  function renderUser(){
+    if(!map.leaflet)return;
+    if(!map.userLayer)map.userLayer=L.layerGroup().addTo(map.leaflet);
+    map.userLayer.clearLayers();
+    if(!userPos)return;
+    if(userPos.accuracy){
+      L.circle([userPos.lat,userPos.lng],{radius:Math.max(5,userPos.accuracy),color:'#147ef5',weight:1,opacity:.22,fillColor:'#147ef5',fillOpacity:.08,interactive:false}).addTo(map.userLayer);
+    }
+    L.circleMarker([userPos.lat,userPos.lng],{radius:8,color:'#fff',weight:4,fillColor:'#147ef5',fillOpacity:1,interactive:false}).addTo(map.userLayer);
+  }
+  function renderSearchPos(){
+    if(!map.leaflet)return;
+    if(!map.searchLayer)map.searchLayer=L.layerGroup().addTo(map.leaflet);
+    map.searchLayer.clearLayers();
+    if(searchPos)L.circleMarker([searchPos.lat,searchPos.lng],{radius:8,color:'#fff',weight:3,fillColor:'#ea6a2a',fillOpacity:1,interactive:false}).addTo(map.searchLayer);
+  }
   function validPoint(p){return Number.isFinite(Number(p?.lat))&&Number.isFinite(Number(p?.lng))}
   function searchable(p){return [p.name,p.city,p.address,p.phone,p.description,p.extra,...(p.tags||[]),...(p.menu||[]).map(m=>m.name)].join(' ').toLowerCase()}
   function avgRating(p){const r=Array.isArray(p.reviews)?p.reviews:[];if(!r.length)return null;return r.reduce((s,x)=>s+Number(x.rating||0),0)/r.length}
@@ -188,15 +250,20 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
   function renderReviews(p){let arr=[...(p.reviews||[])],s=$('sort').value;if(s==='new')arr.sort((a,b)=>b.createdAt-a.createdAt);if(s==='old')arr.sort((a,b)=>a.createdAt-b.createdAt);if(s==='rating')arr.sort((a,b)=>Number(b.rating)-Number(a.rating)||b.createdAt-a.createdAt);$('reviews').innerHTML=arr.length?arr.map(r=>`<div class="review"><div class="review-top"><span class="review-name">${esc(r.name||'Анонім')}</span><span class="review-date">${new Date(r.createdAt||Date.now()).toLocaleDateString('uk-UA')}</span></div><div class="review-rating">${'★'.repeat(Number(r.rating)||0)} <span style="color:#aaa">${Number(r.rating)||0}/5</span></div><div class="review-text">${esc(r.text)}</div></div>`).join(''):'<div class="empty">Відгуків ще немає.<br>Додайте перший відгук.</div>'}
   function setupReview(){const p=state.points.find(x=>x.id===state.selectedId);if(!p)return;$('reviewSubtitle').textContent=p.name;$('reviewName').value='';$('reviewText').value='';state.rating=5;const box=$('reviewRating');box.innerHTML='';for(let i=1;i<=5;i++){const b=document.createElement('button');b.type='button';b.className='rating-btn'+(i===5?' active':'');b.innerHTML=svg('star');b.onclick=()=>{state.rating=i;box.querySelectorAll('.rating-btn').forEach((x,j)=>x.classList.toggle('active',j<i))};box.appendChild(b)}openSheet('reviewSheet')}
   async function compress(file){return await new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>{const img=new Image();img.onload=()=>{const max=1200,scale=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.max(1,Math.round(img.width*scale));c.height=Math.max(1,Math.round(img.height*scale));c.getContext('2d').drawImage(img,0,0,c.width,c.height);resolve(c.toDataURL('image/jpeg',.78))};img.onerror=reject;img.src=fr.result};fr.onerror=reject;fr.readAsDataURL(file)})}
-  function moveByPixels(dx,dy){const z=map.zoom,cx=lng2x(map.center.lng,z)-dx,cy=lat2y(map.center.lat,z)-dy;map.center={lat:clamp(y2lat(cy,z),-85,85),lng:((x2lng(cx,z)+540)%360)-180};renderMap()}
-  function zoomAt(factor){const newZoom=clamp(map.zoom+(factor>1?1:-1),3,19);const anchor={lat:y2lat(lat2y(map.center.lat,map.zoom),map.zoom),lng:map.center.lng};map.zoom=newZoom;setCenter(anchor.lat,anchor.lng,newZoom)}
+  function moveByPixels(dx,dy){
+    if(!map.leaflet)return;
+    map.leaflet.panBy([-dx,-dy],{animate:false});
+    syncMapState();
+  }
+  function zoomAt(factor){
+    if(!map.leaflet)return;
+    map.leaflet.setZoom(clamp(map.leaflet.getZoom()+(factor>1?1:-1),3,19),{animate:true});
+  }
   function initTelegram(){
     try{
       const tg=window.Telegram&&window.Telegram.WebApp;
       if(!tg)return;
       tg.ready();
-      // The map itself uses vertical swipes, so Telegram must not interpret
-      // those swipes as a request to minimize/close the Mini App.
       if(typeof tg.disableVerticalSwipes==='function')tg.disableVerticalSwipes();
       if(typeof tg.expand==='function' && !tg.isExpanded)tg.expand();
       if(typeof tg.setBackgroundColor==='function')tg.setBackgroundColor('#f6f6f4');
@@ -204,128 +271,58 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
   }
   function initMap(){
     const el=$('map');
-    const pointers=new Map();
-    let gesture='none',startCenter={...map.center},startZoom=map.zoom,startPoint=null;
-    let pinchStartDist=0,pinchStartMid=null,pinchAnchor=null,pinchZoom=map.zoom,pinchMid=null;
-    let moved=false,lastTap=0,raf=0,lastPoint=null;
-    let renderedCenter={...map.center},renderedZoom=map.zoom;
-    const distance=(a,b)=>Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
-    const midpoint=(a,b)=>({x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2});
-    const points=()=>Array.from(pointers.values());
-    const layers=()=>[$('tiles'),$('markers'),$('userAccuracy'),$('userDot'),$('searchMarker')];
-
-    const requestFrame=fn=>{if(raf)return;raf=requestAnimationFrame(()=>{raf=0;fn()})};
-    function visualPan(dx,dy){
-      const t=`translate3d(${dx}px,${dy}px,0)`;
-      layers().forEach(x=>{if(x)x.style.transform=t});
-    }
-    function visualPinch(mid,zoom){
-      const scale=Math.pow(2,zoom-startZoom);
-      const dx=mid.x-pinchStartMid.x;
-      const dy=mid.y-pinchStartMid.y;
-      const t=`translate3d(${dx}px,${dy}px,0) scale(${scale})`;
-      layers().forEach(elm=>{
-        if(elm){
-          elm.style.transformOrigin=`${pinchStartMid.x}px ${pinchStartMid.y}px`;
-          elm.style.transform=t;
-        }
-      });
-    }
-    function resetVisual(){
-      if(raf){cancelAnimationFrame(raf);raf=0}
-      layers().forEach(x=>{if(x){x.style.transform='';x.style.transformOrigin=''}});
-      renderedCenter={...map.center};renderedZoom=map.zoom;
-    }
-    function commit(){
-      if(raf){cancelAnimationFrame(raf);raf=0}
-      if(gesture==='pan'&&startPoint){
-        const dx=lastPoint.x-startPoint.x,dy=lastPoint.y-startPoint.y;
-        const z=map.zoom;
-        const cx=lng2x(startCenter.lng,z)-dx;
-        const cy=lat2y(startCenter.lat,z)-dy;
-        map.center={lat:clamp(y2lat(cy,z),-85,85),lng:((x2lng(cx,z)+540)%360)-180};
-      }else if(gesture==='pinch'&&pinchMid&&pinchAnchor){
-        const z=clamp(pinchZoom,3,19);
-        const anchorX=lng2x(pinchAnchor.lng,z);
-        const anchorY=lat2y(pinchAnchor.lat,z);
-        const offsetX=pinchMid.x-window.innerWidth/2;
-        const offsetY=pinchMid.y-window.innerHeight/2;
-        map.zoom=z;
-        map.center={
-          lat:clamp(y2lat(anchorY-offsetY,z),-85,85),
-          lng:((x2lng(anchorX-offsetX,z)+540)%360)-180
-        };
-      }
-      map.zoom=clamp(map.zoom,3,19);
-      renderMap();
-    }
-    function beginPan(e){
-      gesture='pan';moved=false;startCenter={...map.center};startZoom=map.zoom;startPoint={x:e.clientX,y:e.clientY};lastPoint={x:e.clientX,y:e.clientY};map.dragging=true;resetVisual();
-      try{el.setPointerCapture(e.pointerId)}catch(_){}
-    }
-    function movePan(e){
-      if(gesture!=='pan'||!startPoint)return;
-      const dx=e.clientX-startPoint.x,dy=e.clientY-startPoint.y;
-      lastPoint={x:e.clientX,y:e.clientY};
-      if(Math.abs(dx)+Math.abs(dy)>4)moved=true;
-      requestFrame(()=>visualPan(dx,dy));
-    }
-    function beginPinch(a,b){
-      gesture='pinch';moved=true;map.dragging=false;startCenter={...map.center};startZoom=map.zoom;
-      pinchStartDist=Math.max(1,distance(a,b));pinchStartMid=midpoint(a,b);pinchMid=pinchStartMid;pinchZoom=startZoom;resetVisual();
-      const cx=lng2x(startCenter.lng,startZoom),cy=lat2y(startCenter.lat,startZoom);
-      pinchAnchor={lat:y2lat(cy+(pinchStartMid.y-window.innerHeight/2),startZoom),lng:x2lng(cx+(pinchStartMid.x-window.innerWidth/2),startZoom)};
-    }
-    function movePinch(){
-      if(gesture!=='pinch')return;
-      const pts=points();if(pts.length<2)return;
-      const d=Math.max(1,distance(pts[0],pts[1]));
-      pinchMid=midpoint(pts[0],pts[1]);
-      pinchZoom=clamp(startZoom+Math.log2(d/pinchStartDist),3,19);
-      requestFrame(()=>visualPinch(pinchMid,pinchZoom));
-    }
-    function finish(e){
-      pointers.delete(e.pointerId);
-      if(pointers.size===0){
-        const wasMoved=moved,wasPan=gesture==='pan';
-        map.dragging=false;
-        if(gesture==='pan'||gesture==='pinch')commit();else{resetVisual();renderMap()}
-        gesture='none';startPoint=null;pinchMid=null;
-        if(!wasMoved&&wasPan){const now=Date.now();if(now-lastTap<300){zoomAt(2);lastTap=0}else lastTap=now}
-      }else if(pointers.size===1){
-        // If one finger remains after pinch, first commit the pinch position.
-        // Otherwise the next pointerup could be treated as a pan from the old center
-        // and the map would jump back to its pre-zoom position.
-        if(gesture==='pinch'){
-          if(pinchMid&&pinchAnchor){
-            const z=clamp(pinchZoom,3,19);
-            const anchorX=lng2x(pinchAnchor.lng,z);
-            const anchorY=lat2y(pinchAnchor.lat,z);
-            const offsetX=pinchMid.x-window.innerWidth/2;
-            const offsetY=pinchMid.y-window.innerHeight/2;
-            map.zoom=z;
-            map.center={
-              lat:clamp(y2lat(anchorY-offsetY,z),-85,85),
-              lng:((x2lng(anchorX-offsetX,z)+540)%360)-180
-            };
-          }
-          renderMap();
-        }
-        const r=points()[0];
-        gesture='pan';moved=true;
-        startCenter={...map.center};startZoom=map.zoom;
-        startPoint={x:r.clientX,y:r.clientY};lastPoint={x:r.clientX,y:r.clientY};
-        map.dragging=true;resetVisual();
-      }
-    }
-    el.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;if(e.target.closest('.map-marker'))return;pointers.set(e.pointerId,e);if(pointers.size===1)beginPan(e);else if(pointers.size===2)beginPinch(...points().slice(0,2));e.preventDefault()},{passive:false});
-    el.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;pointers.set(e.pointerId,e);if(pointers.size>=2)movePinch();else movePan(e);e.preventDefault()},{passive:false});
-    el.addEventListener('pointerup',e=>{if(!pointers.has(e.pointerId))return;finish(e);e.preventDefault()},{passive:false});
-    el.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);if(pointers.size===0){map.dragging=false;gesture='none';resetVisual();renderMap()}},{passive:false});
-    el.addEventListener('wheel',e=>{e.preventDefault();zoomAt(e.deltaY<0?1:-1)},{passive:false});
-    el.addEventListener('dblclick',e=>{if(e.target.closest('.map-marker'))return;e.preventDefault();zoomAt(2)});
-    window.addEventListener('resize',()=>renderMap());
-    renderMap();
+    if(typeof L==='undefined')return;
+    const initial=L.latLng(DEFAULT_CENTER.lat,DEFAULT_CENTER.lng);
+    map.leaflet=L.map('leafletMap',{
+      center:initial,
+      zoom:DEFAULT_CENTER.zoom,
+      minZoom:3,
+      maxZoom:19,
+      zoomControl:false,
+      attributionControl:true,
+      dragging:true,
+      touchZoom:true,
+      scrollWheelZoom:true,
+      doubleClickZoom:true,
+      boxZoom:false,
+      keyboard:false,
+      tap:false,
+      zoomAnimation:true,
+      fadeAnimation:true,
+      markerZoomAnimation:true,
+      inertia:true,
+      inertiaDeceleration:3200,
+      inertiaMaxSpeed:1800,
+      easeLinearity:.18,
+      worldCopyJump:true,
+      bounceAtZoomLimits:false
+    });
+    map.leaflet.createPane('markersPane');
+    map.leaflet.getPane('markersPane').style.zIndex=650;
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      maxZoom:19,
+      maxNativeZoom:19,
+      tileSize:256,
+      updateWhenIdle:true,
+      updateWhenZooming:false,
+      keepBuffer:3,
+      reuseTiles:true,
+      crossOrigin:true,
+      attribution:'&copy; OpenStreetMap contributors'
+    }).addTo(map.leaflet);
+    map.leaflet.on('move',()=>{
+      syncMapState();
+    });
+    map.leaflet.on('moveend zoomend',()=>{
+      syncMapState();
+      renderUser();
+      renderSearchPos();
+    });
+    map.leaflet.on('zoomstart',()=>{map.dragging=false});
+    map.leaflet.on('zoomend',()=>{map.dragging=false});
+    map.leaflet.whenReady(()=>renderMap());
+    window.addEventListener('resize',()=>map.leaflet.invalidateSize({pan:false,animate:false}));
+    syncMapState();
   }
   function startLocation(centerOnFirst=true){if(!navigator.geolocation)return;let centered=false;const success=pos=>{const lat=pos.coords.latitude,lng=pos.coords.longitude,acc=pos.coords.accuracy||30;userPos={lat,lng,accuracy:acc};if(centerOnFirst&&!centered&&!state.placing){centered=true;setCenter(lat,lng,16)}else renderUser()};const fail=()=>{};navigator.geolocation.getCurrentPosition(success,fail,{enableHighAccuracy:true,maximumAge:15000,timeout:12000});if(locationWatch!==null)navigator.geolocation.clearWatch(locationWatch);locationWatch=navigator.geolocation.watchPosition(success,fail,{enableHighAccuracy:true,maximumAge:10000,timeout:20000});}
   function requestLocation(){
