@@ -121,7 +121,7 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
 <script>
 (() => {
   "use strict";
-  const APP_VERSION="1.4";
+  const APP_VERSION="1.5";
   const KEY="shawarma_guide_v4";
   const OLD_KEYS=["shawarma_guide_v3","shawarma_guide_v2"];
   const TILE_SIZE=256;
@@ -207,7 +207,7 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
     const pointers=new Map();
     let gesture='none',startCenter={...map.center},startZoom=map.zoom,startPoint=null;
     let pinchStartDist=0,pinchStartMid=null,pinchAnchor=null,pinchZoom=map.zoom,pinchMid=null;
-    let moved=false,lastTap=0,raf=0;
+    let moved=false,lastTap=0,raf=0,lastPoint=null;
     let renderedCenter={...map.center},renderedZoom=map.zoom;
     const distance=(a,b)=>Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
     const midpoint=(a,b)=>({x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2});
@@ -233,23 +233,30 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
     }
     function commit(){
       if(raf){cancelAnimationFrame(raf);raf=0}
-      if(gesture==='pinch'&&pinchMid){
-        const z=clamp(Math.round(pinchZoom),3,19);
+      if(gesture==='pan'&&startPoint){
+        const dx=lastPoint.x-startPoint.x,dy=lastPoint.y-startPoint.y;
+        const z=map.zoom;
+        const cx=lng2x(startCenter.lng,z)-dx;
+        const cy=lat2y(startCenter.lat,z)-dy;
+        map.center={lat:clamp(y2lat(cy,z),-85,85),lng:((x2lng(cx,z)+540)%360)-180};
+      }else if(gesture==='pinch'&&pinchMid){
+        const z=clamp(pinchZoom,3,19);
         const ax=lng2x(pinchAnchor.lng,z),ay=lat2y(pinchAnchor.lat,z);
         const dx=pinchMid.x-window.innerWidth/2,dy=pinchMid.y-window.innerHeight/2;
         map.zoom=z;
-        map.center={lat:clamp(y2lat(ax*0+ay-dy,z),-85,85),lng:((x2lng(ax-dx,z)+540)%360)-180};
+        map.center={lat:clamp(y2lat(ay+dy,z),-85,85),lng:((x2lng(ax+dx,z)+540)%360)-180};
       }
-      map.zoom=clamp(Math.round(map.zoom),3,19);
+      map.zoom=clamp(map.zoom,3,19);
       renderMap();
     }
     function beginPan(e){
-      gesture='pan';moved=false;startCenter={...map.center};startZoom=map.zoom;startPoint={x:e.clientX,y:e.clientY};map.dragging=true;resetVisual();
+      gesture='pan';moved=false;startCenter={...map.center};startZoom=map.zoom;startPoint={x:e.clientX,y:e.clientY};lastPoint={x:e.clientX,y:e.clientY};map.dragging=true;resetVisual();
       try{el.setPointerCapture(e.pointerId)}catch(_){}
     }
     function movePan(e){
       if(gesture!=='pan'||!startPoint)return;
       const dx=e.clientX-startPoint.x,dy=e.clientY-startPoint.y;
+      lastPoint={x:e.clientX,y:e.clientY};
       if(Math.abs(dx)+Math.abs(dy)>4)moved=true;
       requestFrame(()=>visualPan(dx,dy));
     }
@@ -272,11 +279,11 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
       if(pointers.size===0){
         const wasMoved=moved,wasPan=gesture==='pan';
         map.dragging=false;
-        if(gesture==='pinch')commit();else{resetVisual();renderMap()}
+        if(gesture==='pan'||gesture==='pinch')commit();else{resetVisual();renderMap()}
         gesture='none';startPoint=null;pinchMid=null;
         if(!wasMoved&&wasPan){const now=Date.now();if(now-lastTap<300){zoomAt(2);lastTap=0}else lastTap=now}
       }else if(pointers.size===1){
-        const r=points()[0];gesture='pan';moved=true;startCenter={...map.center};startZoom=map.zoom;startPoint={x:r.clientX,y:r.clientY};map.dragging=true;resetVisual();
+        const r=points()[0];gesture='pan';moved=true;startCenter={...map.center};startZoom=map.zoom;startPoint={x:r.clientX,y:r.clientY};lastPoint={x:r.clientX,y:r.clientY};map.dragging=true;resetVisual();
       }
     }
     el.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;if(e.target.closest('.map-marker'))return;pointers.set(e.pointerId,e);if(pointers.size===1)beginPan(e);else if(pointers.size===2)beginPinch(...points().slice(0,2));e.preventDefault()},{passive:false});
