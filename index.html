@@ -121,7 +121,7 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
 <script>
 (() => {
   "use strict";
-  const APP_VERSION="1.2";
+  const APP_VERSION="1.3";
   const KEY="shawarma_guide_v4";
   const OLD_KEYS=["shawarma_guide_v3","shawarma_guide_v2"];
   const TILE_SIZE=256;
@@ -144,7 +144,16 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
   const y2lat=(y,z)=>Math.atan(Math.sinh(Math.PI*(1-2*y/(Math.pow(2,z)*TILE_SIZE))))*180/Math.PI;
   function setCenter(lat,lng,zoom=map.zoom){map.center={lat:clamp(lat,-85,85),lng:((lng+540)%360)-180};map.zoom=clamp(zoom,3,19);renderMap();}
   function screenPoint(lat,lng){const worldX=lng2x(lng,map.zoom),worldY=lat2y(lat,map.zoom),cx=lng2x(map.center.lng,map.zoom),cy=lat2y(map.center.lat,map.zoom);return{x:window.innerWidth/2+(worldX-cx),y:window.innerHeight/2+(worldY-cy)};}
-  function renderMap(){renderTiles();renderMarkers();renderUser();renderSearchPos();}
+  function renderMap(){
+    const all=[$('tiles'),$('markers'),$('userAccuracy'),$('userDot'),$('searchMarker')];
+    all.forEach(x=>{if(x)x.style.transform=''});
+    renderTiles();
+    renderMarkers();
+    renderUser();
+    renderSearchPos();
+    renderedCenter={...map.center};
+    renderedZoom=map.zoom;
+  }
   function renderTiles(){const layer=$('tiles');const z=Math.round(clamp(map.zoom,3,19));map.zoom=z;const world=Math.pow(2,z)*TILE_SIZE,cx=lng2x(map.center.lng,z),cy=lat2y(map.center.lat,z),cols=Math.ceil(window.innerWidth/TILE_SIZE)+3,rows=Math.ceil(window.innerHeight/TILE_SIZE)+3,startX=Math.floor((cx-window.innerWidth/2)/TILE_SIZE)-1,startY=Math.floor((cy-window.innerHeight/2)/TILE_SIZE)-1;layer.innerHTML='';for(let dy=0;dy<rows;dy++){for(let dx=0;dx<cols;dx++){const tx=startX+dx,ty=startY+dy;if(ty<0||ty>=Math.pow(2,z))continue;const wrapped=((tx%Math.pow(2,z))+Math.pow(2,z))%Math.pow(2,z);const left=(tx*TILE_SIZE)-(cx-window.innerWidth/2),top=(ty*TILE_SIZE)-(cy-window.innerHeight/2);const img=document.createElement('img');img.className='tile';img.alt='';img.draggable=false;img.loading='eager';img.referrerPolicy='no-referrer';img.src=`https://tile.openstreetmap.org/${z}/${wrapped}/${ty}.png`;img.style.left=left+'px';img.style.top=top+'px';img.onerror=()=>{if(img.dataset.fallback!=='1'){img.dataset.fallback='1';img.src=`https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${z}/${ty}/${wrapped}`}else{img.style.background='#e9ecea'}};layer.appendChild(img)}}}
   function renderMarkers(){const layer=$('markers');layer.innerHTML='';const q=$('searchInput').value.trim().toLowerCase();const points=state.points.filter(p=>validPoint(p)).filter(p=>!q||searchable(p).includes(q));for(const p of points){const pt=screenPoint(Number(p.lat),Number(p.lng));if(pt.x<-90||pt.x>window.innerWidth+90||pt.y<-110||pt.y>window.innerHeight+110)continue;const el=document.createElement('button');el.className='map-marker';el.type='button';el.style.left=pt.x+'px';el.style.top=pt.y+'px';const a=avgRating(p);el.innerHTML=`<div class="marker-rating"><span class="star">★</span><span>${a===null?'~':a.toFixed(1)}</span></div><div class="marker-pin">${svg('food')}</div>`;el.addEventListener('pointerdown',e=>{e.stopPropagation();});
       el.addEventListener('pointerup',e=>{e.stopPropagation();});
@@ -205,11 +214,30 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
     let pinchAnchor=null;
     let moved=false;
     let lastTap=0;
+    let renderedCenter={...map.center};
+    let renderedZoom=map.zoom;
 
     const distance=(a,b)=>Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
     const midpoint=(a,b)=>({x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2});
-
     const pointList=()=>Array.from(pointers.values());
+
+    const layers=()=>[$('tiles'),$('markers'),$('userAccuracy'),$('userDot'),$('searchMarker')];
+
+    // During a drag we move the already rendered layers with CSS instead of
+    // rebuilding all OSM <img> tiles on every finger movement.
+    const applyVisualTransform=()=>{
+      if(renderedZoom!==map.zoom){renderMap();return}
+      const dx=lng2x(map.center.lng,map.zoom)-lng2x(renderedCenter.lng,renderedZoom);
+      const dy=lat2y(map.center.lat,map.zoom)-lat2y(renderedCenter.lat,renderedZoom);
+      const t=`translate3d(${-dx}px,${-dy}px,0)`;
+      layers().forEach(x=>{if(x)x.style.transform=t});
+    };
+
+    const resetVisualTransform=()=>{
+      layers().forEach(x=>{if(x)x.style.transform=''});
+      renderedCenter={...map.center};
+      renderedZoom=map.zoom;
+    };
 
     const beginPan=(e)=>{
       gesture='pan';
@@ -218,6 +246,7 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
       startZoom=map.zoom;
       startPoint={x:e.clientX,y:e.clientY};
       map.dragging=true;
+      resetVisualTransform();
       try{el.setPointerCapture(e.pointerId)}catch(_){}
     };
 
@@ -233,7 +262,7 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
         lat:clamp(y2lat(cy,z),-85,85),
         lng:((x2lng(cx,z)+540)%360)-180
       };
-      renderMap();
+      applyVisualTransform();
     };
 
     const beginPinch=(a,b)=>{
@@ -244,6 +273,7 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
       startZoom=map.zoom;
       pinchStartDist=Math.max(1,distance(a,b));
       pinchStartMid=midpoint(a,b);
+      resetVisualTransform();
 
       const cx=lng2x(startCenter.lng,startZoom);
       const cy=lat2y(startCenter.lat,startZoom);
@@ -264,9 +294,6 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
       const a=pts[0],b=pts[1];
       const d=Math.max(1,distance(a,b));
       const mid=midpoint(a,b);
-      // OSM tile URLs work only with integer zoom levels.
-      // The previous version used fractional zoom here, producing URLs such as /6.42/…
-      // and the tile layer then disappeared completely on pinch zoom.
       const nz=clamp(Math.round(startZoom+Math.log2(d/pinchStartDist)),3,19);
 
       const anchorX=lng2x(pinchAnchor.lng,nz);
@@ -279,7 +306,11 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
         lat:clamp(y2lat(anchorY-dy,nz),-85,85),
         lng:((x2lng(anchorX-dx,nz)+540)%360)-180
       };
-      renderMap();
+
+      // Rebuild OSM tiles only when the integer zoom level actually changes.
+      // Finger movement inside the same zoom level is handled by CSS transforms.
+      if(nz!==renderedZoom) renderMap();
+      else applyVisualTransform();
     };
 
     const finish=(e)=>{
@@ -291,6 +322,9 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
         gesture='none';
         startPoint=null;
         try{el.releasePointerCapture(e.pointerId)}catch(_){}
+
+        // Commit the final position once, avoiding a full tile rebuild during drag.
+        renderMap();
 
         if(!wasMoved&&wasPan){
           const now=Date.now();
@@ -309,6 +343,7 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
         startZoom=map.zoom;
         startPoint={x:remaining.clientX,y:remaining.clientY};
         map.dragging=true;
+        resetVisualTransform();
       }
     };
 
@@ -329,11 +364,8 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
     el.addEventListener('pointermove',e=>{
       if(!pointers.has(e.pointerId))return;
       pointers.set(e.pointerId,e);
-      if(pointers.size>=2){
-        movePinch();
-      }else{
-        movePan(e);
-      }
+      if(pointers.size>=2)movePinch();
+      else movePan(e);
       e.preventDefault();
     },{passive:false});
 
@@ -349,6 +381,7 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
         map.dragging=false;
         gesture='none';
         startPoint=null;
+        renderMap();
       }
     },{passive:false});
 
@@ -364,11 +397,43 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
       zoomAt(2);
     });
 
-    window.addEventListener('resize',renderMap);
+    window.addEventListener('resize',()=>{renderMap()});
     renderMap();
   }
   function startLocation(centerOnFirst=true){if(!navigator.geolocation)return;let centered=false;const success=pos=>{const lat=pos.coords.latitude,lng=pos.coords.longitude,acc=pos.coords.accuracy||30;userPos={lat,lng,accuracy:acc};if(centerOnFirst&&!centered&&!state.placing){centered=true;setCenter(lat,lng,16)}else renderUser()};const fail=()=>{};navigator.geolocation.getCurrentPosition(success,fail,{enableHighAccuracy:true,maximumAge:15000,timeout:12000});if(locationWatch!==null)navigator.geolocation.clearWatch(locationWatch);locationWatch=navigator.geolocation.watchPosition(success,fail,{enableHighAccuracy:true,maximumAge:10000,timeout:20000});}
-  function requestLocation(){if(!window.isSecureContext){toast('Геолокація потребує HTTPS');return}if(!navigator.geolocation){toast('Геолокація недоступна');return}const ok=pos=>{const lat=pos.coords.latitude,lng=pos.coords.longitude;userPos={lat,lng,accuracy:pos.coords.accuracy||30};setCenter(lat,lng,17);$('locateBtn').classList.add('locating');setTimeout(()=>$('locateBtn').classList.remove('locating'),900)};const fail=err=>{const msg=err&&err.code===1?'Дозвіл на геолокацію не надано':err&&err.code===2?'Не вдалося визначити місцезнаходження':'Геолокація не відповідає';toast(msg)};navigator.geolocation.getCurrentPosition(ok,fail,{enableHighAccuracy:true,maximumAge:0,timeout:15000})}
+  function requestLocation(){
+    if(!window.isSecureContext){toast('Геолокація потребує HTTPS');return}
+    if(!navigator.geolocation){toast('Геолокація недоступна');return}
+
+    const finish=(pos)=>{
+      const lat=pos.coords.latitude,lng=pos.coords.longitude;
+      userPos={lat,lng,accuracy:pos.coords.accuracy||30};
+      setCenter(lat,lng,17);
+      $('locateBtn').classList.add('locating');
+      setTimeout(()=>$('locateBtn').classList.remove('locating'),900);
+    };
+
+    // If we already have a recent GPS position, center immediately.
+    // Then request a fresh position in the background.
+    if(userPos){
+      setCenter(userPos.lat,userPos.lng,17);
+      renderUser();
+      $('locateBtn').classList.add('locating');
+      setTimeout(()=>$('locateBtn').classList.remove('locating'),900);
+    }
+
+    const fail=err=>{
+      if(!userPos){
+        const msg=err&&err.code===1?'Дозвіл на геолокацію не надано':err&&err.code===2?'Не вдалося визначити місцезнаходження':'Геолокація не відповідає';
+        toast(msg);
+      }
+    };
+    navigator.geolocation.getCurrentPosition(finish,fail,{
+      enableHighAccuracy:true,
+      maximumAge:10000,
+      timeout:10000
+    });
+  }
   function localResults(q){return state.points.filter(p=>searchable(p).includes(q.toLowerCase())).slice(0,5).map(p=>({type:'point',id:p.id,lat:Number(p.lat),lng:Number(p.lng),title:p.name,subtitle:[p.city,p.address].filter(Boolean).join(' · ')}))}
   function renderSearchResults(items,note=''){const list=$('searchResults');list.innerHTML='';for(const x of items){const b=document.createElement('button');b.type='button';b.className='search-item';b.innerHTML=svg(x.type==='point'?'food':'pin')+`<div><b>${esc(x.title)}</b><span>${esc(x.subtitle||'')}</span></div>`;b.onclick=()=>{if(x.type==='point'){searchPos=null;openDetails(x.id)}else{searchPos={lat:x.lat,lng:x.lng};setCenter(x.lat,x.lng,16);closeSheets();}};list.appendChild(b)}if(note){const d=document.createElement('div');d.className='search-note';d.textContent=note;list.appendChild(d)}}
   async function addressSearch(q){if(searchAbort)searchAbort.abort();searchAbort=new AbortController();try{const r=await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=8&countrycodes=ua&accept-language=uk&q=${encodeURIComponent(q)}`,{headers:{Accept:'application/json'},signal:searchAbort.signal});if(!r.ok)throw Error();const data=await r.json();const items=data.map(x=>({type:'address',lat:Number(x.lat),lng:Number(x.lon),title:x.display_name.split(',').slice(0,2).join(',').trim(),subtitle:x.display_name}));const local=localResults(q);renderSearchResults([...local,...items].slice(0,8),items.length?'Адресу знайдено через OpenStreetMap':'Нічого не знайдено')}catch(e){if(e.name!=='AbortError')renderSearchResults(localResults(q),'Пошук адреси тимчасово недоступний')}}
