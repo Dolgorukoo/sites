@@ -121,7 +121,7 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
 <script>
 (() => {
   "use strict";
-  const APP_VERSION="1.1";
+  const APP_VERSION="1.2";
   const KEY="shawarma_guide_v4";
   const OLD_KEYS=["shawarma_guide_v3","shawarma_guide_v2"];
   const TILE_SIZE=256;
@@ -146,7 +146,9 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
   function screenPoint(lat,lng){const worldX=lng2x(lng,map.zoom),worldY=lat2y(lat,map.zoom),cx=lng2x(map.center.lng,map.zoom),cy=lat2y(map.center.lat,map.zoom);return{x:window.innerWidth/2+(worldX-cx),y:window.innerHeight/2+(worldY-cy)};}
   function renderMap(){renderTiles();renderMarkers();renderUser();renderSearchPos();}
   function renderTiles(){const layer=$('tiles');const z=Math.round(clamp(map.zoom,3,19));map.zoom=z;const world=Math.pow(2,z)*TILE_SIZE,cx=lng2x(map.center.lng,z),cy=lat2y(map.center.lat,z),cols=Math.ceil(window.innerWidth/TILE_SIZE)+3,rows=Math.ceil(window.innerHeight/TILE_SIZE)+3,startX=Math.floor((cx-window.innerWidth/2)/TILE_SIZE)-1,startY=Math.floor((cy-window.innerHeight/2)/TILE_SIZE)-1;layer.innerHTML='';for(let dy=0;dy<rows;dy++){for(let dx=0;dx<cols;dx++){const tx=startX+dx,ty=startY+dy;if(ty<0||ty>=Math.pow(2,z))continue;const wrapped=((tx%Math.pow(2,z))+Math.pow(2,z))%Math.pow(2,z);const left=(tx*TILE_SIZE)-(cx-window.innerWidth/2),top=(ty*TILE_SIZE)-(cy-window.innerHeight/2);const img=document.createElement('img');img.className='tile';img.alt='';img.draggable=false;img.loading='eager';img.referrerPolicy='no-referrer';img.src=`https://tile.openstreetmap.org/${z}/${wrapped}/${ty}.png`;img.style.left=left+'px';img.style.top=top+'px';img.onerror=()=>{if(img.dataset.fallback!=='1'){img.dataset.fallback='1';img.src=`https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${z}/${ty}/${wrapped}`}else{img.style.background='#e9ecea'}};layer.appendChild(img)}}}
-  function renderMarkers(){const layer=$('markers');layer.innerHTML='';const q=$('searchInput').value.trim().toLowerCase();const points=state.points.filter(p=>validPoint(p)).filter(p=>!q||searchable(p).includes(q));for(const p of points){const pt=screenPoint(Number(p.lat),Number(p.lng));if(pt.x<-90||pt.x>window.innerWidth+90||pt.y<-110||pt.y>window.innerHeight+110)continue;const el=document.createElement('button');el.className='map-marker';el.type='button';el.style.left=pt.x+'px';el.style.top=pt.y+'px';const a=avgRating(p);el.innerHTML=`<div class="marker-rating"><span class="star">★</span><span>${a===null?'~':a.toFixed(1)}</span></div><div class="marker-pin">${svg('food')}</div>`;el.addEventListener('click',e=>{e.stopPropagation();openDetails(p.id)});layer.appendChild(el)}}
+  function renderMarkers(){const layer=$('markers');layer.innerHTML='';const q=$('searchInput').value.trim().toLowerCase();const points=state.points.filter(p=>validPoint(p)).filter(p=>!q||searchable(p).includes(q));for(const p of points){const pt=screenPoint(Number(p.lat),Number(p.lng));if(pt.x<-90||pt.x>window.innerWidth+90||pt.y<-110||pt.y>window.innerHeight+110)continue;const el=document.createElement('button');el.className='map-marker';el.type='button';el.style.left=pt.x+'px';el.style.top=pt.y+'px';const a=avgRating(p);el.innerHTML=`<div class="marker-rating"><span class="star">★</span><span>${a===null?'~':a.toFixed(1)}</span></div><div class="marker-pin">${svg('food')}</div>`;el.addEventListener('pointerdown',e=>{e.stopPropagation();});
+      el.addEventListener('pointerup',e=>{e.stopPropagation();});
+      el.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();openDetails(p.id)});layer.appendChild(el)}}
   function renderUser(){const dot=$('userDot'),acc=$('userAccuracy');if(!userPos){dot.style.display='none';acc.style.display='none';return}const pt=screenPoint(userPos.lat,userPos.lng);dot.style.display='block';dot.style.left=pt.x+'px';dot.style.top=pt.y+'px';const m1=screenPoint(userPos.lat,userPos.lng),m2=screenPoint(userPos.lat,userPos.lng+((userPos.accuracy||0)/111320));const radius=Math.max(7,Math.abs(m2.x-m1.x));acc.style.display='block';acc.style.width=(radius*2)+'px';acc.style.height=(radius*2)+'px';acc.style.left=(pt.x-radius)+'px';acc.style.top=(pt.y-radius)+'px'}
   function renderSearchPos(){const el=$('searchMarker');if(!searchPos){el.style.display='none';return}const pt=screenPoint(searchPos.lat,searchPos.lng);el.style.display='block';el.style.left=pt.x+'px';el.style.top=pt.y+'px'}
   function validPoint(p){return Number.isFinite(Number(p?.lat))&&Number.isFinite(Number(p?.lng))}
@@ -348,16 +350,6 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
         gesture='none';
         startPoint=null;
       }
-    },{passive:false});
-
-    el.addEventListener('touchstart',e=>{
-      if(e.touches.length>=1)e.preventDefault();
-    },{passive:false});
-    el.addEventListener('touchmove',e=>{
-      e.preventDefault();
-    },{passive:false});
-    el.addEventListener('touchend',e=>{
-      e.preventDefault();
     },{passive:false});
 
     el.addEventListener('wheel',e=>{
