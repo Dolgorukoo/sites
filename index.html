@@ -9,7 +9,8 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <style>
 :root{--bg:#f5f5f3;--surface:#fff;--soft:#f0f0ed;--text:#171717;--muted:#777;--line:#e3e3df;--accent:#e7652b;--accent-soft:#fff0e8;--danger:#d64c4c;--radius:16px;--font:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF UI Display","Segoe UI",Roboto,Arial,sans-serif}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;width:100%;height:100%;overflow:hidden;font-family:var(--font);color:var(--text);background:var(--bg)}button,input,textarea,select{font:inherit}button{cursor:pointer}#app{height:100%;position:relative}#map{position:absolute;inset:0}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;width:100%;height:100%;overflow:hidden;font-family:var(--font);color:var(--text);background:var(--bg)}button,input,textarea,select{font:inherit}button{cursor:pointer}#app{height:100%;position:relative}#map{position:absolute;inset:0;touch-action:pan-x pan-y}
+#map.placing{touch-action:none}
 .icon{width:18px;text-align:center;font-size:15px;line-height:1}.ui{height:44px;min-width:44px;border:1px solid var(--line);border-radius:14px;background:#fff;color:var(--text);display:flex;align-items:center;justify-content:center;font-size:16px}.ui:active{background:var(--soft)}
 .header{position:absolute;z-index:500;top:calc(10px + env(safe-area-inset-top));left:10px;right:10px;display:flex;gap:8px;align-items:center}.logo{height:44px;padding:0 13px;border:1px solid var(--line);background:#fff;border-radius:14px;display:flex;align-items:center;gap:9px;flex:1;min-width:0}.logo-icon{width:24px;height:24px;display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:17px}.logo-name{font-size:15px;font-weight:780;letter-spacing:-.02em}.logo-count{color:var(--muted);font-size:11px;margin-left:3px;font-weight:500}.header-actions{display:flex;gap:8px}
 .search{position:absolute;z-index:600;top:calc(62px + env(safe-area-inset-top));left:10px;right:10px}.search-box{height:44px;max-width:620px;margin:auto;background:#fff;border:1px solid var(--line);border-radius:14px;display:flex;align-items:center;padding:0 12px;gap:9px}.search-symbol{color:#777}.search input{flex:1;border:0;outline:0;background:transparent;min-width:0;font-size:14px;color:var(--text)}.search button{border:0;background:none;color:#888;font-size:18px;padding:0;display:none}.search.has-value button{display:block}.search-results{display:none;max-width:620px;margin:6px auto 0;background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden}.search-results.open{display:block}.search-result{width:100%;border:0;background:#fff;padding:11px 12px;text-align:left;display:flex;gap:10px;align-items:flex-start;border-bottom:1px solid var(--line)}.search-result:last-child{border-bottom:0}.search-result:active{background:var(--soft)}.search-result i{color:var(--accent);margin-top:2px}.search-result b{font-size:12px;display:block}.search-result span{font-size:10px;color:#888;display:block;margin-top:2px}.search-note{padding:11px 12px;color:#888;font-size:11px}
@@ -84,7 +85,42 @@ async function chooseMapPoint(latlng){setPlacement(false);state.latlng=latlng;st
 function showSearchResults(items,note=""){const box=$("searchResults");box.innerHTML=items.map((x,i)=>`<button class="search-result" type="button" data-i="${i}"><i class="fa-solid fa-location-dot"></i><div><b>${esc(x.title)}</b><span>${esc(x.subtitle||"")}</span></div></button>`).join("")+(note?`<div class="search-note">${esc(note)}</div>`:"");box.classList.toggle("open",items.length>0||!!note);box.querySelectorAll(".search-result").forEach(b=>b.onclick=()=>{const x=items[+b.dataset.i];$("searchResults").classList.remove("open");$("search").blur();map.setView([x.lat,x.lng],16);L.circleMarker([x.lat,x.lng],{radius:7,color:"#e7652b",fillColor:"#fff",fillOpacity:1,weight:3}).addTo(map).bindPopup(`<b>${esc(x.title)}</b>`).openPopup()})}
 async function streetSearch(q){if(searchAbort)searchAbort.abort();searchAbort=new AbortController();try{const r=await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&countrycodes=ua&q=${encodeURIComponent(q)}`,{headers:{Accept:"application/json"},signal:searchAbort.signal});if(!r.ok)throw Error();const data=await r.json();const items=data.map(x=>({lat:+x.lat,lng:+x.lon,title:x.display_name.split(",").slice(0,2).join(","),subtitle:x.display_name}));showSearchResults(items,items.length?"Оберіть місце на карті":"Нічого не знайдено")}catch(e){if(e.name!=="AbortError")showSearchResults([],"Пошук адреси тимчасово недоступний")}}
 function localSearch(q){const items=state.points.filter(p=>[p.name,p.city,p.address,p.phone,...(p.menu||[]).map(m=>m.name)].join(" ").toLowerCase().includes(q.toLowerCase())).slice(0,4).map(p=>({lat:p.lat,lng:p.lng,title:p.name,subtitle:[p.city,p.address].filter(Boolean).join(" · ")}));return items}
-function initMap(){map=L.map("map",{zoomControl:false,attributionControl:true,minZoom:5,maxZoom:19,preferCanvas:true}).setView([49.05,31.4],6.1);L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap contributors"}).addTo(map);L.control.zoom({position:"right"}).addTo(map);markers=L.layerGroup().addTo(map);map.on("click",e=>{if(state.placing){resetEditor();chooseMapPoint(e.latlng)}else{resetEditor();chooseMapPoint(e.latlng)}});renderMarkers()}
+function initMap(){
+map=L.map("map",{zoomControl:false,attributionControl:true,minZoom:5,maxZoom:19,preferCanvas:true,tap:true,touchZoom:true}).setView([49.05,31.4],6.1);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap contributors"}).addTo(map);
+L.control.zoom({position:"right"}).addTo(map);
+markers=L.layerGroup().addTo(map);
+let nativeHandledUntil=0, touchStart=null;
+const container=map.getContainer();
+container.addEventListener("touchstart",e=>{
+ if(!state.placing||!e.touches||e.touches.length!==1)return;
+ const t=e.touches[0]; touchStart={x:t.clientX,y:t.clientY,time:Date.now()};
+},{passive:true});
+container.addEventListener("touchend",e=>{
+ if(!state.placing||!touchStart||!e.changedTouches||e.changedTouches.length!==1)return;
+ const t=e.changedTouches[0],dx=t.clientX-touchStart.x,dy=t.clientY-touchStart.y,dt=Date.now()-touchStart.time;
+ const moved=Math.sqrt(dx*dx+dy*dy);
+ touchStart=null;
+ if(moved>18||dt>700)return;
+ const rect=container.getBoundingClientRect();
+ const point=L.point(t.clientX-rect.left,t.clientY-rect.top);
+ const latlng=map.containerPointToLatLng(point);
+ nativeHandledUntil=Date.now()+500;
+ resetEditor(); chooseMapPoint(latlng);
+},{passive:true});
+container.addEventListener("pointerup",e=>{
+ if(!state.placing||e.pointerType==="mouse"||Date.now()<nativeHandledUntil)return;
+ const rect=container.getBoundingClientRect();
+ const point=L.point(e.clientX-rect.left,e.clientY-rect.top);
+ nativeHandledUntil=Date.now()+500;
+ resetEditor(); chooseMapPoint(map.containerPointToLatLng(point));
+},{passive:true});
+map.on("click",e=>{
+ if(!state.placing||Date.now()<nativeHandledUntil)return;
+ resetEditor(); chooseMapPoint(e.latlng);
+});
+renderMarkers()
+}
 $("add").onclick=()=>{resetEditor();setPlacement(true);closeSheets();toast("Торкніться карти, щоб поставити точку")};$("closeEditor").onclick=()=>{setPlacement(false);closeSheets()};$("cancelEditor").onclick=()=>{setPlacement(false);closeSheets()};$("closeDetails").onclick=closeSheets;$("closeReview").onclick=()=>details(state.selectedId);$("closeData").onclick=closeSheets;$("backdrop").onclick=()=>{setPlacement(false);closeSheets()};
 $("pointForm").onsubmit=e=>{e.preventDefault();if(!state.latlng){toast("Спочатку виберіть місце на карті");return}const old=state.editId?state.points.find(p=>p.id===state.editId):null;const menu=state.menu.filter(m=>String(m.name||"").trim()||String(m.price??"").trim());const p={id:old?.id||uid(),lat:state.latlng.lat,lng:state.latlng.lng,name:$('name').value.trim(),city:$('city').value.trim(),address:state.place?.address||old?.address||"",phone:$('phone').value.trim(),photos:[...state.photos],menu,description:$('description').value.trim(),extra:$('extra').value.trim(),hours:readHours(),tags:[...state.tags],reviews:old?.reviews||[],createdAt:old?.createdAt||Date.now(),updatedAt:Date.now()};if(!p.name||!p.city){toast("Заповніть назву та місто");return}if(old)state.points[state.points.findIndex(x=>x.id===old.id)]=p;else state.points.push(p);save();renderMarkers();setPlacement(false);closeSheets();map.setView([p.lat,p.lng],Math.max(map.getZoom(),15));setTimeout(()=>details(p.id),180);toast(old?"Точку оновлено":"Точку додано")};
 $("photoAdd").onclick=()=>$("photoInput").click();$("photoInput").onchange=async e=>{for(const f of [...e.target.files].slice(0,6-state.photos.length)){try{state.photos.push(await compress(f));renderPhotos()}catch(x){toast("Не вдалося додати фото")}}e.target.value=""};
