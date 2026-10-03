@@ -121,7 +121,7 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
 <script>
 (() => {
   "use strict";
-  const APP_VERSION="1.6";
+  const APP_VERSION="1.7";
   const KEY="shawarma_guide_v4";
   const OLD_KEYS=["shawarma_guide_v3","shawarma_guide_v2"];
   const TILE_SIZE=256;
@@ -293,7 +293,29 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
         gesture='none';startPoint=null;pinchMid=null;
         if(!wasMoved&&wasPan){const now=Date.now();if(now-lastTap<300){zoomAt(2);lastTap=0}else lastTap=now}
       }else if(pointers.size===1){
-        const r=points()[0];gesture='pan';moved=true;startCenter={...map.center};startZoom=map.zoom;startPoint={x:r.clientX,y:r.clientY};lastPoint={x:r.clientX,y:r.clientY};map.dragging=true;resetVisual();
+        // If one finger remains after pinch, first commit the pinch position.
+        // Otherwise the next pointerup could be treated as a pan from the old center
+        // and the map would jump back to its pre-zoom position.
+        if(gesture==='pinch'){
+          if(pinchMid&&pinchAnchor){
+            const z=clamp(pinchZoom,3,19);
+            const anchorX=lng2x(pinchAnchor.lng,z);
+            const anchorY=lat2y(pinchAnchor.lat,z);
+            const offsetX=pinchMid.x-window.innerWidth/2;
+            const offsetY=pinchMid.y-window.innerHeight/2;
+            map.zoom=z;
+            map.center={
+              lat:clamp(y2lat(anchorY-offsetY,z),-85,85),
+              lng:((x2lng(anchorX-offsetX,z)+540)%360)-180
+            };
+          }
+          renderMap();
+        }
+        const r=points()[0];
+        gesture='pan';moved=true;
+        startCenter={...map.center};startZoom=map.zoom;
+        startPoint={x:r.clientX,y:r.clientY};lastPoint={x:r.clientX,y:r.clientY};
+        map.dragging=true;resetVisual();
       }
     }
     el.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;if(e.target.closest('.map-marker'))return;pointers.set(e.pointerId,e);if(pointers.size===1)beginPan(e);else if(pointers.size===2)beginPinch(...points().slice(0,2));e.preventDefault()},{passive:false});
