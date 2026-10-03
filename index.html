@@ -121,7 +121,7 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
 <script>
 (() => {
   "use strict";
-  const APP_VERSION="1.3";
+  const APP_VERSION="1.4";
   const KEY="shawarma_guide_v4";
   const OLD_KEYS=["shawarma_guide_v3","shawarma_guide_v2"];
   const TILE_SIZE=256;
@@ -205,199 +205,87 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
   function initMap(){
     const el=$('map');
     const pointers=new Map();
-    let gesture='none';
-    let startCenter={...map.center};
-    let startZoom=map.zoom;
-    let startPoint=null;
-    let pinchStartDist=0;
-    let pinchStartMid=null;
-    let pinchAnchor=null;
-    let moved=false;
-    let lastTap=0;
-    let renderedCenter={...map.center};
-    let renderedZoom=map.zoom;
-
+    let gesture='none',startCenter={...map.center},startZoom=map.zoom,startPoint=null;
+    let pinchStartDist=0,pinchStartMid=null,pinchAnchor=null,pinchZoom=map.zoom,pinchMid=null;
+    let moved=false,lastTap=0,raf=0;
+    let renderedCenter={...map.center},renderedZoom=map.zoom;
     const distance=(a,b)=>Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
     const midpoint=(a,b)=>({x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2});
-    const pointList=()=>Array.from(pointers.values());
-
+    const points=()=>Array.from(pointers.values());
     const layers=()=>[$('tiles'),$('markers'),$('userAccuracy'),$('userDot'),$('searchMarker')];
 
-    // During a drag we move the already rendered layers with CSS instead of
-    // rebuilding all OSM <img> tiles on every finger movement.
-    const applyVisualTransform=()=>{
-      if(renderedZoom!==map.zoom){renderMap();return}
-      const dx=lng2x(map.center.lng,map.zoom)-lng2x(renderedCenter.lng,renderedZoom);
-      const dy=lat2y(map.center.lat,map.zoom)-lat2y(renderedCenter.lat,renderedZoom);
-      const t=`translate3d(${-dx}px,${-dy}px,0)`;
+    const requestFrame=fn=>{if(raf)return;raf=requestAnimationFrame(()=>{raf=0;fn()})};
+    function visualPan(dx,dy){
+      const t=`translate3d(${dx}px,${dy}px,0)`;
       layers().forEach(x=>{if(x)x.style.transform=t});
-    };
-
-    const resetVisualTransform=()=>{
-      layers().forEach(x=>{if(x)x.style.transform=''});
-      renderedCenter={...map.center};
-      renderedZoom=map.zoom;
-    };
-
-    const beginPan=(e)=>{
-      gesture='pan';
-      moved=false;
-      startCenter={...map.center};
-      startZoom=map.zoom;
-      startPoint={x:e.clientX,y:e.clientY};
-      map.dragging=true;
-      resetVisualTransform();
+    }
+    function visualPinch(mid,zoom){
+      const scale=Math.pow(2,zoom-renderedZoom);
+      const x=mid.x-scale*pinchStartMid.x;
+      const y=mid.y-scale*pinchStartMid.y;
+      const t=`translate3d(${x}px,${y}px,0) scale(${scale})`;
+      layers().forEach(elm=>{if(elm){elm.style.transformOrigin='0 0';elm.style.transform=t}});
+    }
+    function resetVisual(){
+      if(raf){cancelAnimationFrame(raf);raf=0}
+      layers().forEach(x=>{if(x){x.style.transform='';x.style.transformOrigin=''}});
+      renderedCenter={...map.center};renderedZoom=map.zoom;
+    }
+    function commit(){
+      if(raf){cancelAnimationFrame(raf);raf=0}
+      if(gesture==='pinch'&&pinchMid){
+        const z=clamp(Math.round(pinchZoom),3,19);
+        const ax=lng2x(pinchAnchor.lng,z),ay=lat2y(pinchAnchor.lat,z);
+        const dx=pinchMid.x-window.innerWidth/2,dy=pinchMid.y-window.innerHeight/2;
+        map.zoom=z;
+        map.center={lat:clamp(y2lat(ax*0+ay-dy,z),-85,85),lng:((x2lng(ax-dx,z)+540)%360)-180};
+      }
+      map.zoom=clamp(Math.round(map.zoom),3,19);
+      renderMap();
+    }
+    function beginPan(e){
+      gesture='pan';moved=false;startCenter={...map.center};startZoom=map.zoom;startPoint={x:e.clientX,y:e.clientY};map.dragging=true;resetVisual();
       try{el.setPointerCapture(e.pointerId)}catch(_){}
-    };
-
-    const movePan=(e)=>{
+    }
+    function movePan(e){
       if(gesture!=='pan'||!startPoint)return;
-      const dx=e.clientX-startPoint.x;
-      const dy=e.clientY-startPoint.y;
-      if(Math.abs(dx)+Math.abs(dy)>5)moved=true;
-      const z=startZoom;
-      const cx=lng2x(startCenter.lng,z)-dx;
-      const cy=lat2y(startCenter.lat,z)-dy;
-      map.center={
-        lat:clamp(y2lat(cy,z),-85,85),
-        lng:((x2lng(cx,z)+540)%360)-180
-      };
-      applyVisualTransform();
-    };
-
-    const beginPinch=(a,b)=>{
-      gesture='pinch';
-      moved=true;
-      map.dragging=false;
-      startCenter={...map.center};
-      startZoom=map.zoom;
-      pinchStartDist=Math.max(1,distance(a,b));
-      pinchStartMid=midpoint(a,b);
-      resetVisualTransform();
-
-      const cx=lng2x(startCenter.lng,startZoom);
-      const cy=lat2y(startCenter.lat,startZoom);
-      const dx=pinchStartMid.x-window.innerWidth/2;
-      const dy=pinchStartMid.y-window.innerHeight/2;
-
-      pinchAnchor={
-        lat:y2lat(cy+dy,startZoom),
-        lng:x2lng(cx+dx,startZoom)
-      };
-    };
-
-    const movePinch=()=>{
+      const dx=e.clientX-startPoint.x,dy=e.clientY-startPoint.y;
+      if(Math.abs(dx)+Math.abs(dy)>4)moved=true;
+      requestFrame(()=>visualPan(dx,dy));
+    }
+    function beginPinch(a,b){
+      gesture='pinch';moved=true;map.dragging=false;startCenter={...map.center};startZoom=map.zoom;
+      pinchStartDist=Math.max(1,distance(a,b));pinchStartMid=midpoint(a,b);pinchMid=pinchStartMid;pinchZoom=startZoom;resetVisual();
+      const cx=lng2x(startCenter.lng,startZoom),cy=lat2y(startCenter.lat,startZoom);
+      pinchAnchor={lat:y2lat(cy+(pinchStartMid.y-window.innerHeight/2),startZoom),lng:x2lng(cx+(pinchStartMid.x-window.innerWidth/2),startZoom)};
+    }
+    function movePinch(){
       if(gesture!=='pinch')return;
-      const pts=pointList();
-      if(pts.length<2)return;
-
-      const a=pts[0],b=pts[1];
-      const d=Math.max(1,distance(a,b));
-      const mid=midpoint(a,b);
-      const nz=clamp(Math.round(startZoom+Math.log2(d/pinchStartDist)),3,19);
-
-      const anchorX=lng2x(pinchAnchor.lng,nz);
-      const anchorY=lat2y(pinchAnchor.lat,nz);
-      const dx=mid.x-window.innerWidth/2;
-      const dy=mid.y-window.innerHeight/2;
-
-      map.zoom=nz;
-      map.center={
-        lat:clamp(y2lat(anchorY-dy,nz),-85,85),
-        lng:((x2lng(anchorX-dx,nz)+540)%360)-180
-      };
-
-      // Rebuild OSM tiles only when the integer zoom level actually changes.
-      // Finger movement inside the same zoom level is handled by CSS transforms.
-      if(nz!==renderedZoom) renderMap();
-      else applyVisualTransform();
-    };
-
-    const finish=(e)=>{
+      const pts=points();if(pts.length<2)return;
+      const d=Math.max(1,distance(pts[0],pts[1]));
+      pinchMid=midpoint(pts[0],pts[1]);
+      pinchZoom=clamp(startZoom+Math.log2(d/pinchStartDist),3,19);
+      requestFrame(()=>visualPinch(pinchMid,pinchZoom));
+    }
+    function finish(e){
       pointers.delete(e.pointerId);
       if(pointers.size===0){
-        const wasMoved=moved;
-        const wasPan=gesture==='pan';
+        const wasMoved=moved,wasPan=gesture==='pan';
         map.dragging=false;
-        gesture='none';
-        startPoint=null;
-        try{el.releasePointerCapture(e.pointerId)}catch(_){}
-
-        // Commit the final position once, avoiding a full tile rebuild during drag.
-        renderMap();
-
-        if(!wasMoved&&wasPan){
-          const now=Date.now();
-          if(now-lastTap<300){
-            zoomAt(2);
-            lastTap=0;
-          }else{
-            lastTap=now;
-          }
-        }
+        if(gesture==='pinch')commit();else{resetVisual();renderMap()}
+        gesture='none';startPoint=null;pinchMid=null;
+        if(!wasMoved&&wasPan){const now=Date.now();if(now-lastTap<300){zoomAt(2);lastTap=0}else lastTap=now}
       }else if(pointers.size===1){
-        const remaining=pointList()[0];
-        gesture='pan';
-        moved=true;
-        startCenter={...map.center};
-        startZoom=map.zoom;
-        startPoint={x:remaining.clientX,y:remaining.clientY};
-        map.dragging=true;
-        resetVisualTransform();
+        const r=points()[0];gesture='pan';moved=true;startCenter={...map.center};startZoom=map.zoom;startPoint={x:r.clientX,y:r.clientY};map.dragging=true;resetVisual();
       }
-    };
-
-    el.addEventListener('pointerdown',e=>{
-      if(e.pointerType==='mouse'&&e.button!==0)return;
-      if(e.target.closest('.map-marker'))return;
-
-      pointers.set(e.pointerId,e);
-
-      if(pointers.size===1){
-        beginPan(e);
-      }else if(pointers.size===2){
-        beginPinch(...pointList().slice(0,2));
-      }
-      e.preventDefault();
-    },{passive:false});
-
-    el.addEventListener('pointermove',e=>{
-      if(!pointers.has(e.pointerId))return;
-      pointers.set(e.pointerId,e);
-      if(pointers.size>=2)movePinch();
-      else movePan(e);
-      e.preventDefault();
-    },{passive:false});
-
-    el.addEventListener('pointerup',e=>{
-      if(!pointers.has(e.pointerId))return;
-      finish(e);
-      e.preventDefault();
-    },{passive:false});
-
-    el.addEventListener('pointercancel',e=>{
-      pointers.delete(e.pointerId);
-      if(pointers.size===0){
-        map.dragging=false;
-        gesture='none';
-        startPoint=null;
-        renderMap();
-      }
-    },{passive:false});
-
-    el.addEventListener('wheel',e=>{
-      e.preventDefault();
-      const factor=e.deltaY<0?1:-1;
-      zoomAt(factor);
-    },{passive:false});
-
-    el.addEventListener('dblclick',e=>{
-      if(e.target.closest('.map-marker'))return;
-      e.preventDefault();
-      zoomAt(2);
-    });
-
-    window.addEventListener('resize',()=>{renderMap()});
+    }
+    el.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;if(e.target.closest('.map-marker'))return;pointers.set(e.pointerId,e);if(pointers.size===1)beginPan(e);else if(pointers.size===2)beginPinch(...points().slice(0,2));e.preventDefault()},{passive:false});
+    el.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;pointers.set(e.pointerId,e);if(pointers.size>=2)movePinch();else movePan(e);e.preventDefault()},{passive:false});
+    el.addEventListener('pointerup',e=>{if(!pointers.has(e.pointerId))return;finish(e);e.preventDefault()},{passive:false});
+    el.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);if(pointers.size===0){map.dragging=false;gesture='none';resetVisual();renderMap()}},{passive:false});
+    el.addEventListener('wheel',e=>{e.preventDefault();zoomAt(e.deltaY<0?1:-1)},{passive:false});
+    el.addEventListener('dblclick',e=>{if(e.target.closest('.map-marker'))return;e.preventDefault();zoomAt(2)});
+    window.addEventListener('resize',()=>renderMap());
     renderMap();
   }
   function startLocation(centerOnFirst=true){if(!navigator.geolocation)return;let centered=false;const success=pos=>{const lat=pos.coords.latitude,lng=pos.coords.longitude,acc=pos.coords.accuracy||30;userPos={lat,lng,accuracy:acc};if(centerOnFirst&&!centered&&!state.placing){centered=true;setCenter(lat,lng,16)}else renderUser()};const fail=()=>{};navigator.geolocation.getCurrentPosition(success,fail,{enableHighAccuracy:true,maximumAge:15000,timeout:12000});if(locationWatch!==null)navigator.geolocation.clearWatch(locationWatch);locationWatch=navigator.geolocation.watchPosition(success,fail,{enableHighAccuracy:true,maximumAge:10000,timeout:20000});}
