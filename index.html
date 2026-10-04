@@ -132,7 +132,7 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
 <script>
 (() => {
   "use strict";
-  const APP_VERSION="2.1";
+  const APP_VERSION="2.2";
   const API_URL="https://script.google.com/macros/s/AKfycbzg4PnKZ2KGbky2_VbMxyyhPMRiWSzLcHhp9FbHnMocCz1HHB8taEIGwH7QfVwnBzm90w/exec";
   const TILE_SIZE=256;
   const DEFAULT_CENTER={lat:49.05,lng:31.25,zoom:6};
@@ -226,13 +226,62 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
   function avgRating(p){const r=Array.isArray(p.reviews)?p.reviews:[];if(!r.length)return null;return r.reduce((s,x)=>s+Number(x.rating||0),0)/r.length}
   function starText(n){if(n===null)return '☆☆☆☆☆';const k=Math.round(n);return '★'.repeat(k)+'☆'.repeat(5-k)}
   function hoursDefault(){const o={};DAY_KEYS.forEach(k=>o[k]={closed:false,from:'10:00',to:'22:00'});return o}
-  function normalize(p){const x={...p};x.id=String(x.id||uid());x.lat=Number(x.lat);x.lng=Number(x.lng);x.reviews=Array.isArray(x.reviews)?x.reviews:[];x.tags=Array.isArray(x.tags)?x.tags:[];x.photos=Array.isArray(x.photos)?x.photos:[];x.hours=x.hours||hoursDefault();if(!Array.isArray(x.menu)){const m=[];if(x.prices?.small!=null)m.push({name:'Мала',price:x.prices.small});if(x.prices?.standard!=null)m.push({name:'Стандарт',price:x.prices.standard});if(x.prices?.xl!=null)m.push({name:'XL',price:x.prices.xl});x.menu=m}x.extra=x.extra??x.extra_info??'';x.createdAt=x.createdAt||Date.now();x.updatedAt=x.updatedAt||x.createdAt;return x}
-  async function apiGet(action,params={}){const q=new URLSearchParams({action,...params});const r=await fetch(API_URL+'?'+q.toString());const t=await r.text();let d;try{d=JSON.parse(t)}catch(_){throw Error('Некоректна відповідь сервера')}if(!r.ok||!d.ok)throw Error(d.error||'Помилка сервера');return d}
-  async function apiRequest(action,payload={}){const r=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,...payload})});const t=await r.text();let d;try{d=JSON.parse(t)}catch(_){throw Error('Некоректна відповідь сервера')}if(!r.ok||!d.ok)throw Error(d.error||'Помилка сервера');return d}
-  function telegramUserId(){try{return String(window.Telegram?.WebApp?.initDataUnsafe?.user?.id||'')}catch(_){return ''}}
-  function serverReviewToApp(r){return{id:String(r.id||uid()),name:r.name||'Анонім',rating:Number(r.rating)||0,text:r.text||'',createdAt:r.created_at?Date.parse(r.created_at):Date.now()}}
-  function serverPointToApp(p){return normalize({...p,extra:p.extra_info??p.extra??'',createdAt:p.created_at?Date.parse(p.created_at):Date.now(),updatedAt:p.updated_at?Date.parse(p.updated_at):Date.now(),reviews:[]})}
-  async function load(){try{const d=await apiGet('points');state.points=(Array.isArray(d.points)?d.points:[]).map(serverPointToApp).filter(validPoint);await Promise.all(state.points.map(async p=>{try{const r=await apiGet('reviews',{point_id:p.id});p.reviews=(Array.isArray(r.reviews)?r.reviews:[]).map(serverReviewToApp)}catch(_){p.reviews=[]}}));counts();renderMap()}catch(e){state.points=[];counts();renderMap();console.error(e);toast('Не вдалося завантажити точки')}}
+  function normalize(p){
+    const x={...p};
+    x.id=String(x.id||uid());
+    x.lat=Number(x.lat); x.lng=Number(x.lng);
+    x.reviews=Array.isArray(x.reviews)?x.reviews:[];
+    x.tags=Array.isArray(x.tags)?x.tags:[];
+    x.photos=Array.isArray(x.photos)?x.photos:[];
+    x.hours=x.hours||hoursDefault();
+    if(!Array.isArray(x.menu))x.menu=[];
+    x.extra=x.extra??x.extra_info??'';
+    x.createdAt=x.createdAt||(x.created_at?Date.parse(x.created_at):Date.now());
+    x.updatedAt=x.updatedAt||(x.updated_at?Date.parse(x.updated_at):x.createdAt);
+    return x
+  }
+  function telegramUserId(){
+    try{return String(window.Telegram?.WebApp?.initDataUnsafe?.user?.id||'')}catch(_){return ''}
+  }
+  async function apiGet(action,params={}){
+    const q=new URLSearchParams({action,...params});
+    const r=await fetch(API_URL+'?'+q.toString(),{method:'GET',cache:'no-store'});
+    const text=await r.text();
+    let data; try{data=JSON.parse(text)}catch(_){throw new Error('API повернув не JSON')}
+    if(!r.ok||!data.ok)throw new Error(data.error||'Помилка API');
+    return data
+  }
+  async function apiPost(action,payload={}){
+    // text/plain avoids an unnecessary CORS preflight with Apps Script Web Apps.
+    const r=await fetch(API_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({action,...payload})
+    });
+    const text=await r.text();
+    let data; try{data=JSON.parse(text)}catch(_){throw new Error('API повернув не JSON')}
+    if(!r.ok||!data.ok)throw new Error(data.error||'Помилка API');
+    return data
+  }
+  function serverReviewToApp(r){
+    return {id:String(r.id||uid()),name:r.name||'Анонім',rating:Number(r.rating)||0,text:r.text||'',createdAt:r.created_at?Date.parse(r.created_at):Date.now()}
+  }
+  async function load(){
+    try{
+      const data=await apiGet('points');
+      state.points=(Array.isArray(data.points)?data.points:[]).map(normalize).filter(validPoint);
+      await Promise.all(state.points.map(async p=>{
+        try{
+          const rd=await apiGet('reviews',{point_id:p.id});
+          p.reviews=(Array.isArray(rd.reviews)?rd.reviews:[]).map(serverReviewToApp)
+        }catch(_){p.reviews=[]}
+      }));
+      counts(); renderMap();
+    }catch(e){
+      state.points=[]; counts(); renderMap();
+      console.error(e); toast('Помилка підключення до бази')
+    }
+  }
   function persist(){return true}
   function counts(){let reviews=0;state.points.forEach(p=>reviews+=(p.reviews||[]).length);$('statPoints').textContent=state.points.length;$('statReviews').textContent=reviews;$('appVersion').textContent=APP_VERSION}
   function openSheet(id){['editorSheet','detailsSheet','reviewSheet','searchSheet','dataSheet'].forEach(x=>$(x).classList.remove('open'));$(id).classList.add('open');$('backdrop').classList.add('open')}
@@ -366,15 +415,48 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}input,t
   function renderSearchResults(items,note=''){const list=$('searchResults');list.innerHTML='';for(const x of items){const b=document.createElement('button');b.type='button';b.className='search-item';b.innerHTML=svg(x.type==='point'?'food':'pin')+`<div><b>${esc(x.title)}</b><span>${esc(x.subtitle||'')}</span></div>`;b.onclick=()=>{if(x.type==='point'){searchPos=null;openDetails(x.id)}else{searchPos={lat:x.lat,lng:x.lng};setCenter(x.lat,x.lng,16);closeSheets();}};list.appendChild(b)}if(note){const d=document.createElement('div');d.className='search-note';d.textContent=note;list.appendChild(d)}}
   async function addressSearch(q){if(searchAbort)searchAbort.abort();searchAbort=new AbortController();try{const r=await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=8&countrycodes=ua&accept-language=uk&q=${encodeURIComponent(q)}`,{headers:{Accept:'application/json'},signal:searchAbort.signal});if(!r.ok)throw Error();const data=await r.json();const items=data.map(x=>({type:'address',lat:Number(x.lat),lng:Number(x.lon),title:x.display_name.split(',').slice(0,2).join(',').trim(),subtitle:x.display_name}));const local=localResults(q);renderSearchResults([...local,...items].slice(0,8),items.length?'Адресу знайдено через OpenStreetMap':'Нічого не знайдено')}catch(e){if(e.name!=='AbortError')renderSearchResults(localResults(q),'Пошук адреси тимчасово недоступний')}}
   $('addBtn').onclick=()=>{if(state.placing){selectCenterForEditor();setPlacement(false);return}resetEditor();setPlacement(true);closeSheets();toast('Перемістіть карту під приціл')};
-  $('pointForm').onsubmit=async e=>{e.preventDefault();if(!state.latlng){toast('Спочатку виберіть місце');return}if(state.editId){toast('Редагування доступне лише адміністратору');return}const p={lat:Number(state.latlng.lat),lng:Number(state.latlng.lng),name:$('name').value.trim(),city:$('city').value.trim(),address:state.place?.address||'',phone:$('phone').value.trim(),photos:[...state.photos],menu:state.menu.filter(x=>String(x.name||'').trim()||String(x.price??'').trim()),description:$('description').value.trim(),extra_info:$('extra').value.trim(),hours:readHours(),tags:[...state.tags],telegram_user_id:telegramUserId()};if(!p.name){toast('Вкажіть назву точки');return}const b=$('savePoint'),old=b.innerHTML;b.disabled=true;b.innerHTML='<span>Надсилання…</span>';try{const r=await apiRequest('create_point',p);setPlacement(false);closeSheets();resetEditor();addedToast(r.message||'Надіслано на модерацію');await load()}catch(err){toast(err.message||'Не вдалося надіслати точку')}finally{b.disabled=false;b.innerHTML=old}};
+  $('pointForm').onsubmit=async e=>{
+    e.preventDefault();
+    if(!state.latlng){toast('Спочатку виберіть місце');return}
+    if(state.editId){toast('Редагування доступне лише адміністратору');return}
+    const point={
+      lat:Number(state.latlng.lat),lng:Number(state.latlng.lng),
+      name:$('name').value.trim(),city:$('city').value.trim(),
+      address:state.place?.address||'',phone:$('phone').value.trim(),
+      photos:[...state.photos],
+      menu:state.menu.filter(x=>String(x.name||'').trim()||String(x.price??'').trim()).map(x=>({name:String(x.name||'').trim(),price:x.price===''?'':Number(x.price)})),
+      description:$('description').value.trim(),extra_info:$('extra').value.trim(),
+      hours:readHours(),tags:[...state.tags],telegram_user_id:telegramUserId()
+    };
+    if(!point.name){toast('Вкажіть назву точки');return}
+    const b=$('savePoint'), old=b.innerHTML; b.disabled=true; b.innerHTML='<span>Надсилання…</span>';
+    try{
+      await apiPost('create_point',point);
+      setPlacement(false);closeSheets();resetEditor();
+      addedToast('Надіслано на модерацію');
+    }catch(err){console.error(err);toast(err.message||'Не вдалося надіслати точку')}
+    finally{b.disabled=false;b.innerHTML=old}
+  };
   $('photoInput').onchange=async e=>{const files=[...e.target.files].slice(0,6-state.photos.length);for(const f of files){try{state.photos.push(await compress(f))}catch(_){toast('Не вдалося додати фото')}}renderPhotos();e.target.value=''};
   $('addMenu').onclick=()=>{state.menu.push({name:'',price:''});renderMenu();setTimeout(()=>document.querySelector('.menu-name:last-of-type')?.focus(),10)};
-  $('closeEditor').onclick=()=>{setPlacement(false);closeSheets()};$('cancelEditor').onclick=()=>{setPlacement(false);closeSheets()};$('closeDetails').onclick=closeSheets;$('editPoint').onclick=()=>toast('Редагування доступне лише адміністратору');$('addReview').onclick=setupReview;$('closeReview').onclick=()=>openDetails(state.selectedId);$('cancelReview').onclick=()=>openDetails(state.selectedId);$('reviewForm').onsubmit=async e=>{e.preventDefault();const p=state.points.find(x=>x.id===state.selectedId);if(!p)return;const text=$('reviewText').value.trim();if(!text){toast('Напишіть відгук');return}const b=$('saveReview'),old=b.innerHTML;b.disabled=true;b.innerHTML='<span>Надсилання…</span>';try{await apiRequest('create_review',{point_id:p.id,telegram_user_id:telegramUserId(),name:$('reviewName').value.trim()||'Анонім',rating:Number(state.rating)||5,text});await load();openDetails(p.id);addedToast('Відгук додано')}catch(err){toast(err.message||'Не вдалося додати відгук')}finally{b.disabled=false;b.innerHTML=old}};$('sort').onchange=()=>{const p=state.points.find(x=>x.id===state.selectedId);if(p)renderReviews(p)};
+  $('closeEditor').onclick=()=>{setPlacement(false);closeSheets()};$('cancelEditor').onclick=()=>{setPlacement(false);closeSheets()};$('closeDetails').onclick=closeSheets;$('editPoint').onclick=()=>toast('Редагування доступне лише адміністратору');$('addReview').onclick=setupReview;$('closeReview').onclick=()=>openDetails(state.selectedId);$('cancelReview').onclick=()=>openDetails(state.selectedId);$('reviewForm').onsubmit=async e=>{
+    e.preventDefault();
+    const p=state.points.find(x=>x.id===state.selectedId); if(!p)return;
+    const text=$('reviewText').value.trim(); if(!text){toast('Напишіть відгук');return}
+    const b=$('saveReview'),old=b.innerHTML;b.disabled=true;b.innerHTML='<span>Надсилання…</span>';
+    try{
+      await apiPost('create_review',{point_id:p.id,telegram_user_id:telegramUserId(),name:$('reviewName').value.trim()||'Анонім',rating:Number(state.rating)||5,text});
+      const rd=await apiGet('reviews',{point_id:p.id});
+      p.reviews=(Array.isArray(rd.reviews)?rd.reviews:[]).map(serverReviewToApp);
+      counts();openDetails(p.id);addedToast('Відгук додано')
+    }catch(err){console.error(err);toast(err.message||'Не вдалося додати відгук')}
+    finally{b.disabled=false;b.innerHTML=old}
+  };$('sort').onchange=()=>{const p=state.points.find(x=>x.id===state.selectedId);if(p)renderReviews(p)};
   $('searchOpen').onclick=()=>{openSheet('searchSheet');setTimeout(()=>$('searchInput').focus(),100)};$('closeSearch').onclick=closeSheets;$('searchInput').oninput=()=>{const q=$('searchInput').value.trim();$('clearSearch').classList.toggle('show',!!q);renderMarkers();clearTimeout(searchTimer);if(!q){$('searchResults').innerHTML='';return}const local=localResults(q);renderSearchResults(local,'Шукаємо також вулиці та адреси…');searchTimer=setTimeout(()=>addressSearch(q),420)};$('clearSearch').onclick=()=>{$('searchInput').value='';$('clearSearch').classList.remove('show');$('searchResults').innerHTML='';renderMarkers();$('searchInput').focus()};
   $('locateBtn').onclick=requestLocation;$('dataBtn').onclick=()=>{counts();openSheet('dataSheet')};$('closeData').onclick=closeSheets;$('backdrop').onclick=()=>{setPlacement(false);closeSheets()};
   $('exportData').onclick=()=>{const blob=new Blob([JSON.stringify({version:APP_VERSION,exportedAt:new Date().toISOString(),points:state.points},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='gid-shaurmy.json';a.click();URL.revokeObjectURL(url);toast('Експортовано')};
-  $('importData').onclick=()=>toast('Імпорт у спільну базу доступний лише адміністратору');
-  $('clearData').onclick=()=>toast('Видалення точок доступне лише адміністратору');
+  $('importData').onclick=()=>toast('Імпорт доступний лише адміністратору');
+  $('clearData').onclick=()=>toast('Видалення доступне лише адміністратору');
   load();counts();renderTags();renderPhotos();renderMenu();renderHours();initTelegram();initMap();startLocation(true);setTimeout(()=>{if(!userPos&&!state.placing)startLocation(true)},1200);
 })();
 </script>
