@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#102b24">
+<title>Деберц — карточная игра</title>
+<style>
+:root{--felt:#155642;--felt2:#0d3b30;--gold:#f2c66d;--cream:#fff8e9;--ink:#18231f}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at center,var(--felt),var(--felt2));color:#fff;font-family:system-ui,-apple-system,Segoe UI,sans-serif;min-height:100svh}
+button{font:inherit;cursor:pointer}.app{max-width:760px;margin:auto;padding:14px 12px calc(18px + env(safe-area-inset-bottom));min-height:100svh;display:flex;flex-direction:column;gap:12px}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px}.brand{font-weight:900;font-size:clamp(22px,6vw,30px);letter-spacing:.4px}.brand span{color:var(--gold)}.pill{background:#ffffff18;border:1px solid #ffffff2c;border-radius:999px;padding:7px 11px;font-size:13px}
+.scorebar{display:grid;grid-template-columns:1fr 1fr;gap:8px}.score{background:#ffffff12;border:1px solid #ffffff24;border-radius:14px;padding:9px 12px}.score b{display:block;font-size:23px;color:var(--gold)}.score small{opacity:.8}
+.table{background:#092e25a8;border:1px solid #ffffff20;border-radius:22px;padding:12px;display:flex;flex-direction:column;gap:12px;flex:1;min-height:390px}
+.seat{text-align:center;min-height:76px}.seat .name{font-weight:750}.backcards{display:flex;justify-content:center;margin-top:6px}.back{width:34px;height:48px;border-radius:6px;background:repeating-linear-gradient(45deg,#d8c18d,#d8c18d 3px,#315e50 3px,#315e50 6px);border:2px solid #f4e4b9;margin-left:-12px;box-shadow:0 2px 5px #0005}
+.middle{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:center;flex:1;min-height:130px}.playzone{min-height:126px;border:1px dashed #ffffff35;border-radius:16px;display:flex;align-items:center;justify-content:center;gap:12px;padding:8px;position:relative}.playzone:before{content:attr(data-label);position:absolute;top:6px;left:9px;font-size:11px;opacity:.55}.card{width:clamp(56px,17vw,82px);aspect-ratio:0.70;background:var(--cream);color:var(--ink);border-radius:9px;border:1px solid #e4d6bd;box-shadow:0 3px 7px #0005;display:flex;flex-direction:column;justify-content:space-between;padding:5px 6px;font-weight:800;position:relative;user-select:none}.card .rank{font-size:clamp(17px,5vw,23px);line-height:1}.card .suit{font-size:clamp(18px,5vw,24px);align-self:flex-end}.red{color:#c73535}.card.backface{background:repeating-linear-gradient(135deg,#e8d6a9,#e8d6a9 5px,#356b57 5px,#356b57 10px);border:3px solid #f5e8c9}
+.status{text-align:center;min-height:42px;color:#fff1cf;font-size:14px;line-height:1.35}.trump{display:flex;justify-content:center;align-items:center;gap:8px;font-size:13px;opacity:.9}.trump strong{font-size:22px}
+.hand{display:flex;justify-content:center;gap:clamp(2px,1vw,7px);padding:4px 0 2px;overflow-x:auto;min-height:112px}.hand .card{flex:0 0 clamp(48px,13.5vw,72px);width:clamp(48px,13.5vw,72px);transition:transform .12s}.hand button{border:0;padding:0;background:none;border-radius:10px}.hand button:active .card{transform:translateY(-8px)}.hand button:disabled{opacity:.45}
+.actions{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}.action{border:0;border-radius:999px;padding:10px 16px;background:var(--gold);color:#2b2416;font-weight:800}.action.secondary{background:#ffffff1b;color:white;border:1px solid #ffffff40}.action:disabled{opacity:.4}
+.suits{display:flex;justify-content:center;gap:8px}.suitbtn{width:48px;height:44px;border:1px solid #ffffff50;border-radius:12px;background:#ffffff18;color:white;font-size:25px}.suitbtn:active{background:var(--gold);color:#222}
+footer{text-align:center;font-size:11px;opacity:.65}
+.overlay{position:fixed;inset:0;background:#071b17d9;display:none;align-items:center;justify-content:center;padding:18px;z-index:5}.overlay.show{display:flex}.modal{max-width:420px;width:100%;background:#fdf5e6;color:#20352c;border-radius:20px;padding:22px;text-align:center;box-shadow:0 20px 70px #0008}.modal h2{margin:0 0 8px}.modal p{line-height:1.45}.modal .action{margin:5px}
+@media(min-width:600px){.app{padding-top:20px}.table{min-height:470px}.hand{min-height:130px}}
+</style>
+</head>
+<body>
+<div class="app">
+<header><div class="brand">♠ ДЕБЕРЦ<span>.</span></div><div class="pill" id="round">Партия до 301</div></header>
+<div class="scorebar">
+ <div class="score"><small>Вы</small><b id="youScore">0</b></div>
+ <div class="score"><small>Компьютер</small><b id="cpuScore">0</b></div>
+</div>
+<section class="table">
+ <div class="seat"><div class="name">🤖 Компьютер</div><div class="backcards" id="cpuBack"></div></div>
+ <div class="trump">Козырь: <strong id="trump">—</strong><span id="stockInfo"></span></div>
+ <div class="middle">
+  <div class="playzone" data-label="Компьютер" id="cpuPlay"></div>
+  <div class="playzone" data-label="Вы" id="youPlay"></div>
+ </div>
+ <div class="status" id="status" aria-live="polite">Нажмите «Начать партию».</div>
+ <div class="seat"><div class="name">🙂 Вы</div><div class="hand" id="hand"></div></div>
+</section>
+<div class="actions" id="mainActions"><button class="action" id="start">Начать партию</button><button class="action secondary" id="rules">Правила</button></div>
+<div class="suits" id="suitChoices" hidden></div>
+<footer>Локальная игра против компьютера · работает без интернета</footer>
+</div>
+<div class="overlay" id="overlay"><div class="modal"><h2 id="modalTitle">Правила</h2><p id="modalText"></p><button class="action" id="modalOk">Понятно</button></div></div>
+<script>
+(()=>{
+const suits=['♠','♥','♦','♣'], red=s=>s==='♥'||s==='♦';
+const ranks=['7','8','9','J','Q','K','10','A'];
+const normal={'7':0,'8':0,'9':0,'J':2,'Q':3,'K':4,'10':10,'A':11};
+const trumpVal={'7':0,'8':0,'Q':3,'K':4,'10':10,'A':11,'9':14,'J':20};
+let deck=[],you=[],cpu=[],stock=[],trump=null,lead=null,turn='you',played={},scores=[0,0],trickPoints=[0,0],tricks=0,locked=false,started=false;
+const $=id=>document.getElementById(id);
+function shuffle(a){for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function makeDeck(){let d=[];for(let s of suits)for(let r of ranks)d.push({s,r,id:r+s});return shuffle(d)}
+function value(c){return c.s===trump?trumpVal[c.r]:normal[c.r]}
+function strength(c){let order=c.s===trump?['7','8','Q','K','10','A','9','J']:['7','8','9','J','Q','K','10','A'];return order.indexOf(c.r)}
+function cardHTML(c,back=false){if(back)return '<div class="card backface"></div>';return `<div class="card ${red(c.s)?'red':''}"><span class="rank">${c.r}</span><span class="suit">${c.s}</span></div>`}
+function render(){
+ $('youScore').textContent=scores[0];$('cpuScore').textContent=scores[1];
+ $('cpuBack').innerHTML=cpu.map(()=>'<div class="back"></div>').join('');
+ $('hand').innerHTML=you.map((c,i)=>`<button aria-label="${c.r}${c.s}" data-i="${i}" ${turn!=='you'||locked?'disabled':''}>${cardHTML(c)}</button>`).join('');
+ $('hand').querySelectorAll('button').forEach(b=>b.onclick=()=>play('you',+b.dataset.i));
+ $('trump').textContent=trump||'—';$('stockInfo').textContent=started?` · колода: ${stock.length}`:'';
+ $('cpuPlay').innerHTML=played.cpu?cardHTML(played.cpu):'';$('youPlay').innerHTML=played.you?cardHTML(played.you):'';
+ $('round').textContent=`Взятка ${Math.min(tricks+1,16)} / 16`;
+}
+function say(t){$('status').textContent=t}
+function showModal(title,text){$('modalTitle').textContent=title;$('modalText').textContent=text;$('overlay').classList.add('show')}
+$('modalOk').onclick=()=>$('overlay').classList.remove('show');
+$('rules').onclick=()=>showModal('Короткие правила','Упрощённый вариант Деберца для двух игроков. В колоде 32 карты. Сначала выберите козырную масть. Нужно ходить в масть, если она есть; иначе можно положить любую карту. Старший козырь или старшая карта масти хода забирает взятку. Очки карт: валет козырей — 20, девятка козырей — 14, туз — 11, десятка — 10, король — 4, дама — 3, валет не козырный — 2. Побеждает тот, кто первым наберёт 301 очко. Это компактная версия для быстрой игры.');
+$('start').onclick=()=>{
+ scores=[0,0];newDeal();
+};
+function newDeal(){
+ deck=makeDeck();you=deck.splice(0,6);cpu=deck.splice(0,6);stock=deck;trump=null;lead=null;turn='you';played={};trickPoints=[0,0];tricks=0;locked=false;started=true;
+ $('mainActions').hidden=true;$('suitChoices').hidden=false;
+ $('suitChoices').innerHTML=suits.map(s=>`<button class="suitbtn" data-s="${s}">${s}</button>`).join('');
+ $('suitChoices').querySelectorAll('button').forEach(b=>b.onclick=()=>chooseTrump(b.dataset.s));
+ say('Выберите козырную масть.');render();
+}
+function chooseTrump(s){trump=s;$('suitChoices').hidden=true;turn='you';say('Ваш ход. Выберите карту.');render()}
+function canPlay(hand,c){
+ if(!lead)return true;let same=hand.filter(x=>x.s===lead.s);
+ return !same.length||c.s===lead.s;
+}
+function play(who,index){
+ if(locked||turn!==who)return;
+ let hand=who==='you'?you:cpu,c=hand[index];if(!canPlay(hand,c)){say('Нужно положить карту масти хода.');return}
+ hand.splice(index,1);played[who]=c;if(!lead)lead=c;
+ render();
+ if(!played.you||!played.cpu){turn=who==='you'?'cpu':'you';if(turn==='cpu')setTimeout(cpuMove,550);else say('Ваш ход.');return}
+ resolveTrick();
+}
+function cpuMove(){
+ if(locked||turn!=='cpu')return;
+ let legal=cpu.map((c,i)=>({c,i})).filter(x=>canPlay(cpu,x.c));
+ let pick;
+ if(played.you){
+  let winning=legal.filter(x=>beats(x.c,played.you,lead.s));
+  pick=(winning.length?winning:legal).sort((a,b)=>value(a.c)-value(b.c))[0];
+ }else pick=legal.sort((a,b)=>value(a.c)-value(b.c))[0];
+ play('cpu',pick.i);
+}
+function beats(a,b,s){
+ if(a.s===trump&&b.s!==trump)return true;if(a.s!==trump&&b.s===trump)return false;
+ if(a.s===b.s)return strength(a)>strength(b);
+ return a.s===s;
+}
+function resolveTrick(){
+ locked=true;
+ let winner=beats(played.cpu,played.you,lead.s)?'cpu':'you';
+ let pts=value(played.you)+value(played.cpu);
+ trickPoints[winner==='you'?0:1]+=pts;
+ if(stock.length>=2){you.push(stock.shift());cpu.push(stock.shift())}
+ tricks++;
+ say(`${winner==='you'?'Вы':'Компьютер'} забирает взятку · ${pts} очков на столе.`);
+ render();
+ setTimeout(()=>{
+  played={};lead=null;locked=false;
+  if(!you.length&&!cpu.length){finishDeal();return}
+  turn=winner;
+  render();
+  if(turn==='cpu'){say('Ход компьютера…');setTimeout(cpuMove,500)}else say('Ваша очередь. Выберите карту.');
+ },900);
+}
+function finishDeal(){
+ let bonus=10;let a=trickPoints[0],b=trickPoints[1];
+ if(a>b)a+=bonus;else if(b>a)b+=bonus;else{a+=5;b+=5}
+ scores[0]+=a;scores[1]+=b;render();
+ let won=scores[0]>=301||scores[1]>=301;
+ showModal(won?(scores[0]>scores[1]?'Вы победили! 🎉':'Компьютер победил'):'Сдача завершена',
+ `За сдачу: вы — ${a}, компьютер — ${b}. Общий счёт: ${scores[0]} : ${scores[1]}.${won?'':' Нажмите «Новая сдача», чтобы продолжить.'}`);
+ $('mainActions').hidden=false;$('start').textContent=won?'Играть заново':'Новая сдача';
+ $('suitChoices').hidden=true;started=false;
+}
+})();
+</script>
+</body>
+</html>
