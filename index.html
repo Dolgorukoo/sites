@@ -15,15 +15,15 @@ header{display:flex;justify-content:space-between;align-items:center}.brand{font
 .seat{text-align:center;min-height:60px}.name{font-weight:750}.backs{display:flex;justify-content:center;margin-top:5px}.back{width:29px;height:41px;margin-left:-9px;border:2px solid #f5e8c9;border-radius:5px;background:repeating-linear-gradient(45deg,#d8c18d 0 3px,#315e50 3px 6px);box-shadow:0 2px 4px #0005}
 .trumpLine{text-align:center;font-size:13px;min-height:29px;color:#fff0c9}.trumpLine strong{font-size:24px;vertical-align:middle;margin:0 4px}
 .center{display:grid;grid-template-columns:1fr 1fr;gap:9px;flex:1;align-items:center;min-height:145px}.slot{height:140px;border:1px dashed #ffffff40;border-radius:15px;display:flex;align-items:center;justify-content:center;gap:7px;position:relative;padding-top:12px}.slot:before{content:attr(data-label);position:absolute;top:5px;left:8px;font-size:10px;opacity:.55}
-.card{width:clamp(55px,16vw,78px);aspect-ratio:.70;background:var(--paper);color:#18231f;border-radius:9px;border:1px solid #e4d6bd;box-shadow:0 4px 9px #0006;display:flex;flex-direction:column;justify-content:space-between;padding:5px 6px;font-weight:850;position:relative;animation:cardIn .28s cubic-bezier(.2,.8,.2,1) both}.card .rank{font-size:clamp(17px,5vw,23px);line-height:1}.card .suit{font-size:clamp(18px,5vw,24px);align-self:flex-end}.red{color:#c73535}
-@keyframes cardIn{from{opacity:0;transform:translateY(-24px) rotate(-9deg) scale(.82)}to{opacity:1;transform:translateY(0) rotate(0) scale(1)}}
+.card{width:clamp(55px,16vw,78px);aspect-ratio:.70;background:var(--paper);color:#18231f;border-radius:9px;border:1px solid #e4d6bd;box-shadow:0 4px 9px #0006;display:flex;flex-direction:column;justify-content:space-between;padding:5px 6px;font-weight:850;position:relative;animation:cardIn .55s cubic-bezier(.18,.78,.22,1) both}.card .rank{font-size:clamp(17px,5vw,23px);line-height:1}.card .suit{font-size:clamp(18px,5vw,24px);align-self:flex-end}.red{color:#c73535}
+@keyframes cardIn{from{opacity:0;transform:translateY(-38px) rotate(-13deg) scale(.78)}to{opacity:1;transform:translateY(0) rotate(0) scale(1)}}
+@keyframes dealIn{from{opacity:0;transform:translateY(28px) rotate(7deg) scale(.88)}to{opacity:1;transform:translateY(0) rotate(0) scale(1)}}
 .status{text-align:center;min-height:38px;color:#ffedc5;font-size:13px;line-height:1.35;display:flex;align-items:center;justify-content:center}
-.hand{display:flex;justify-content:center;gap:clamp(1px,1vw,7px);min-height:104px;padding:4px 0;overflow-x:auto}.hand button{background:none;border:0;padding:0;border-radius:10px;flex:0 0 clamp(46px,13.2vw,70px)}.hand button .card{width:100%;transition:transform .16s,filter .16s}.hand button:not(:disabled):active .card{transform:translateY(-9px) scale(1.04)}.hand button:disabled{filter:grayscale(.5);opacity:.72}
+.hand{display:flex;justify-content:center;gap:clamp(1px,1vw,7px);min-height:104px;padding:4px 0;overflow-x:auto}.hand button{background:none;border:0;padding:0;border-radius:10px;flex:0 0 clamp(46px,13.2vw,70px)}.hand button .card{width:100%;transition:transform .28s ease,filter .28s ease;animation:dealIn .65s cubic-bezier(.18,.78,.22,1) both}.hand button:not(:disabled):active .card{transform:translateY(-9px) scale(1.04)}.hand button:disabled{filter:grayscale(.5);opacity:.72}
 .controls{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}.btn{border:0;border-radius:30px;padding:10px 17px;background:var(--gold);color:#2b2416;font-weight:850;box-shadow:0 3px 0 #a77d35}.btn:active{transform:translateY(2px);box-shadow:0 1px 0 #a77d35}.btn.alt{background:#ffffff18;color:white;border:1px solid #ffffff45;box-shadow:none}
 footer{text-align:center;font-size:10px;opacity:.65}
 .overlay{position:fixed;inset:0;background:#061a16df;display:none;align-items:center;justify-content:center;padding:18px;z-index:5}.overlay.show{display:flex}.modal{width:min(420px,100%);background:#fff7e8;color:#20352c;border-radius:22px;padding:22px;text-align:center;box-shadow:0 20px 70px #0009}.modal h2{margin:0 0 8px}.modal p{line-height:1.45}.modal .btn{margin-top:10px}
-.roulette{width:190px;height:190px;border-radius:50%;margin:18px auto;background:conic-gradient(#fff4d7 0 25%,#d9e8d9 25% 50%,#fff4d7 50% 75%,#d9e8d9 75%);border:8px solid #c79d4c;box-shadow:0 7px 18px #0003;display:grid;place-items:center;position:relative;animation:spin 2.5s cubic-bezier(.12,.7,.12,1) both}.roulette:before{content:"";position:absolute;top:-16px;left:calc(50% - 12px);border-left:12px solid transparent;border-right:12px solid transparent;border-top:24px solid #a83c32;z-index:2}.wheelSymbols{font-size:43px;display:grid;grid-template-columns:1fr 1fr;gap:6px;color:#23352e}.wheelSymbols span:nth-child(2),.wheelSymbols span:nth-child(3){color:#c73535}
-@keyframes spin{0%{transform:rotate(0)}70%{transform:rotate(1250deg)}100%{transform:rotate(1440deg)}}
+.roulette{width:210px;height:210px;border-radius:50%;margin:20px auto;background:conic-gradient(from -45deg,#fff4d7 0 25%,#d9e8d9 25% 50%,#fff4d7 50% 75%,#d9e8d9 75%);border:9px solid #c79d4c;box-shadow:0 8px 22px #0005;position:relative;transform:rotate(0deg);transition:transform 5.2s cubic-bezier(.08,.76,.12,1);will-change:transform}.roulette:after{content:"";position:absolute;inset:40%;border-radius:50%;background:#f8e8c4;border:4px solid #b78b3c;box-shadow:0 2px 5px #0004}.roulette:before{content:"";position:absolute;top:-17px;left:calc(50% - 13px);border-left:13px solid transparent;border-right:13px solid transparent;border-top:27px solid #a83c32;z-index:3;filter:drop-shadow(0 2px 1px #0005)}.wheelSymbols{position:absolute;inset:0;font-size:42px;font-weight:900;color:#20352c}.wheelSymbols span{position:absolute;transform:translate(-50%,-50%);text-shadow:0 1px 0 #fff}.wheelSymbols span:nth-child(1){left:75%;top:25%}.wheelSymbols span:nth-child(2){left:75%;top:75%;color:#c73535}.wheelSymbols span:nth-child(3){left:25%;top:75%}.wheelSymbols span:nth-child(4){left:25%;top:25%;color:#c73535}
 @media(min-width:600px){.table{min-height:480px}.hand{min-height:120px}}
 </style>
 </head>
@@ -61,7 +61,7 @@ function render(){
  $('youScore').textContent=scores[0];$('cpuScore').textContent=scores[1];
  $('cpuBack').innerHTML=cpu.map(()=>'<div class="back"></div>').join('');
  $('hand').innerHTML=you.map((c,i)=>`<button data-i="${i}" aria-label="${c.r}${c.s}" ${(!active||turn!=='you'||locked)?'disabled':''}>${card(c)}</button>`).join('');
- $('hand').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>play('you',Number(b.dataset.i))));
+ $('hand').querySelectorAll('button').forEach((b,i)=>{b.style.animationDelay=`${i*90}ms`;b.addEventListener('click',()=>play('you',Number(b.dataset.i)))});
  $('cpuSlot').innerHTML=played.cpu?card(played.cpu):'';$('youSlot').innerHTML=played.you?card(played.you):'';
  $('trumpLine').innerHTML=trump?`Козырь: <strong style="color:${isRed(trump)?'#ffb0a9':'#fff'}">${trump}</strong> · В колоде: ${stock.length}`:'Козырь ещё не выбран';
  $('round').textContent=`Взятка ${Math.min(tricks+1,16)} / 16`;
@@ -77,13 +77,19 @@ $('start').onclick=async()=>{
 async function newDeal(){
  const token=++dealToken;active=false;locked=true;played={};lead=null;trump=null;tricks=0;trickPts=[0,0];
  const d=makeDeck();you=d.splice(0,6);cpu=d.splice(0,6);stock=d;turn='you';render();
- const wheel=`<div class="roulette"><div class="wheelSymbols"><span>♠</span><span>♥</span><span>♣</span><span>♦</span></div></div>`;
+ const wheel=`<div class="roulette" id="wheel"><div class="wheelSymbols"><span>♠</span><span>♥</span><span>♣</span><span>♦</span></div></div>`;
  modal('Рулетка выбирает масть','Крутится…',wheel);
- await wait(2550);if(token!==dealToken)return;
- trump=SUITS[Math.floor(Math.random()*SUITS.length)];
+ const chosenIndex=Math.floor(Math.random()*SUITS.length);
+ // Сектора расположены по часовой стрелке: ♠, ♥, ♣, ♦. Центр выбранного сектора приводим точно под верхний указатель.
+ const centerAngle=45+chosenIndex*90;
+ const targetAngle=360*9+((270-centerAngle+360)%360);
+ await wait(80);
+ const wheelEl=$('wheel');if(wheelEl)wheelEl.style.transform=`rotate(${targetAngle}deg)`;
+ await wait(5500);if(token!==dealToken)return;
+ trump=SUITS[chosenIndex];
  const body=`<div style="font-size:72px;color:${isRed(trump)?'#c73535':'#172820'};margin:10px">${trump}</div>`;
  $('modalBody').innerHTML=body;$('modalTitle').textContent='Ваш козырь';$('modalText').textContent='Рулетка выбрала масть. Удачной игры!';
- await wait(900);if(token!==dealToken)return;closeModal();
+ await wait(1500);if(token!==dealToken)return;closeModal();
  active=true;locked=false;turn='you';say('Ваш ход — выберите любую карту.');render();
 }
 function legal(hand,c){if(!lead)return true;return hand.some(x=>x.s===lead.s)?c.s===lead.s:true}
